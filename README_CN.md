@@ -1,3 +1,29 @@
+# 🚀 服务器一键部署与更新
+
+> 适用于 Ubuntu / Debian 的无桌面服务器。脚本仅询问 API 端口（默认 `18080`），安装目录会按版本类型和端口自动生成；账户配置、API Key 与运行数据在更新时保留。API Key 生成后保存在安装目录的 `api-key.txt`，仅 root 可读，不会直接显示。
+
+**部署我的 Fork 版**
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/qingan123/Chat2API/main/scripts/install-fork.sh)
+```
+
+**部署官方最新版本**
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/qingan123/Chat2API/main/scripts/install-official.sh)
+```
+
+**更新已部署实例（自动发现 Fork版与官方版多实例）**
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/qingan123/Chat2API/main/scripts/update.sh)
+```
+
+默认目录：Fork版 `/opt/chat2api-<端口>`，官方版 `/opt/chat2api-official-<端口>`。部署后以脚本实际输出的公网 `/v1` 地址、服务名和 API Key 文件路径为准；公网访问仍需放行云安全组、防火墙或反向代理。
+
+---
+
 # Chat2API
 
 <p align="center">
