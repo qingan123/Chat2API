@@ -15,6 +15,7 @@ import type {
 } from './types/electron'
 
 const MANAGEMENT_SECRET_KEY = 'chat2api.managementSecret'
+const ADMIN_USERNAME_KEY = 'chat2api.adminUsername'
 const MANAGEMENT_BASE = '/v0/management'
 
 type ManagementResponse<T = unknown> = {
@@ -56,20 +57,30 @@ export function getStoredManagementSecret(): string {
   return sessionStorage.getItem(MANAGEMENT_SECRET_KEY) || ''
 }
 
+export function getStoredAdminUsername(): string {
+  return sessionStorage.getItem(ADMIN_USERNAME_KEY) || ''
+}
+
+export function setAdminUsername(username: string): void {
+  sessionStorage.setItem(ADMIN_USERNAME_KEY, username)
+}
+
 export function setManagementSecret(secret: string): void {
   sessionStorage.setItem(MANAGEMENT_SECRET_KEY, secret)
 }
 
 export function clearManagementSecret(): void {
   sessionStorage.removeItem(MANAGEMENT_SECRET_KEY)
+  sessionStorage.removeItem(ADMIN_USERNAME_KEY)
 }
 
-export async function verifyManagementSecret(secret: string): Promise<boolean> {
+export async function verifyManagementCredentials(username: string, secret: string): Promise<boolean> {
   if (!secret) return false
 
   const response = await fetch(`${MANAGEMENT_BASE}/health`, {
     headers: {
       Authorization: `Bearer ${secret}`,
+      'X-Admin-Username': username.trim(),
     },
   })
 
@@ -83,6 +94,10 @@ export async function verifyManagementSecret(secret: string): Promise<boolean> {
 
   const payload = await response.json() as ManagementResponse
   return payload.success === true
+}
+
+export async function verifyManagementSecret(secret: string): Promise<boolean> {
+  return verifyManagementCredentials(getStoredAdminUsername(), secret)
 }
 
 function getManagementSecret(): string {
@@ -99,6 +114,7 @@ async function managementFetch<T>(
 ): Promise<T> {
   const headers = new Headers(init.headers)
   headers.set('Authorization', `Bearer ${getManagementSecret()}`)
+  headers.set('X-Admin-Username', getStoredAdminUsername())
 
   if (init.body !== undefined && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json')

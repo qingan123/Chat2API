@@ -119,6 +119,19 @@ export async function managementAuthMiddleware(ctx: Context, next: Next): Promis
     return
   }
 
+  const configuredAdminUsername = process.env.CHAT2API_ADMIN_USERNAME?.trim()
+  if (configuredAdminUsername) {
+    const providedAdminUsername = ctx.get('X-Admin-Username').trim()
+    if (providedAdminUsername !== configuredAdminUsername) {
+      ctx.status = 401
+      ctx.body = createUnauthorizedResponse(
+        'Invalid administrator username',
+        'invalid_admin_username'
+      )
+      return
+    }
+  }
+
   await next()
 }
 

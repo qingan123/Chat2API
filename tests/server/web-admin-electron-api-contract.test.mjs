@@ -131,6 +131,20 @@ test('web admin keeps browser management secret in sync after settings changes',
   )
 })
 
+test('web admin supports a real administrator username with the management password', () => {
+  const apiSource = fs.readFileSync('src/renderer/src/web-admin-api.ts', 'utf8')
+  const loginSource = fs.readFileSync('src/renderer/src/web-main.tsx', 'utf8')
+  const authSource = fs.readFileSync('src/main/proxy/middleware/managementAuth.ts', 'utf8')
+
+  assert.match(apiSource, /chat2api\.adminUsername/)
+  assert.match(apiSource, /X-Admin-Username/)
+  assert.match(apiSource, /verifyManagementCredentials/)
+  assert.match(loginSource, /管理员账号/)
+  assert.match(loginSource, /管理员密码/)
+  assert.match(authSource, /CHAT2API_ADMIN_USERNAME/)
+  assert.match(authSource, /invalid_admin_username/)
+})
+
 test('web admin proxy start is idempotent when docker server is already running', () => {
   const source = fs.readFileSync('src/renderer/src/web-admin-api.ts', 'utf8')
 

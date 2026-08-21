@@ -1,6 +1,6 @@
 # 🚀 服务器一键部署与更新
 
-> 适用于 Ubuntu / Debian 的无桌面服务器。脚本仅询问 API 端口（默认 `18080`），安装目录会按版本类型和端口自动生成；账户配置、API Key 与运行数据在更新时保留。API Key 生成后保存在安装目录的 `api-key.txt`，仅 root 可读，不会直接显示。
+> 适用于 Ubuntu / Debian 无桌面服务器。安装脚本会在 SSH 中交互输入部署端口、管理员账号和管理员密码，自动部署原生 `/admin/` WebUI；API Key 单独生成并保存为仅 root 可读文件。更新前会备份账户、配置、凭据和运行数据。
 
 **部署我的 Fork 版**
 
@@ -8,19 +8,21 @@
 bash <(curl -fsSL https://raw.githubusercontent.com/qingan123/Chat2API/main/scripts/install-fork.sh)
 ```
 
-**部署官方最新版本**
+**部署 Py 上游对照版**
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/qingan123/Chat2API/main/scripts/install-official.sh)
 ```
 
-**更新已部署实例（自动发现 Fork版与官方版多实例）**
+**更新已部署实例（自动发现 Fork版与 Py 上游版多实例）**
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/qingan123/Chat2API/main/scripts/update.sh)
 ```
 
-默认目录：Fork版 `/opt/chat2api-<端口>`，官方版 `/opt/chat2api-official-<端口>`。部署后以脚本实际输出的公网 `/v1` 地址、服务名和 API Key 文件路径为准；公网访问仍需放行云安全组、防火墙或反向代理。
+默认目录：Fork版 `/opt/chat2api-<端口>`，Py 上游版 `/opt/chat2api-py-upstream-<端口>`。后台地址为 `http://公网IP:<端口>/admin/`，OpenAI Base URL 为 `http://公网IP:<端口>/v1`。部署成功不等于云安全组、防火墙、NAT 或反向代理已经放行端口。
+
+后续对比 `pyf-feifei/Chat2API` 与官方 `xiaoY233/Chat2API`、同步上游、解决冲突、测试和回滚，请阅读 [`docs/MAINTENANCE_CN.md`](docs/MAINTENANCE_CN.md)。
 
 ---
 

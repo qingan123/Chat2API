@@ -2,178 +2,210 @@
 set -euo pipefail
 
 DEFAULT_PORT=18080
-FORK_REPO_URL="https://github.com/qingan123/Chat2API.git"
-PROJECT_NAME="Chat2API Fork版"
+REPOSITORY="qingan123/Chat2API"
+REPO_URL="${CHAT2API_REPO_URL:-https://github.com/${REPOSITORY}.git}"
+GIT_REF="${CHAT2API_GIT_REF:-main}"
+DEPLOY_TYPE="fork"
+PROJECT_NAME="Chat2API 用户 Fork版"
 
 log() { printf '[Chat2API] %s\n' "$*"; }
 die() { printf '[Chat2API] 错误：%s\n' "$*" >&2; exit 1; }
-
 require_root() { [ "$(id -u)" -eq 0 ] || die "请使用 root 或 sudo 执行。"; }
 
-prompt_port() {
-  local value="${CHAT2API_PORT:-}"
-  if [ -z "$value" ]; then
-    [ -r /dev/tty ] || die "无法读取交互终端；请设置 CHAT2API_PORT 后重试。"
-    read -r -p "请输入 API 端口 [$DEFAULT_PORT]: " value </dev/tty
-    value="${value:-$DEFAULT_PORT}"
+read_tty() {
+  [ -r /dev/tty ] || die "无法读取交互终端。请在 SSH 终端中运行此脚本。"
+  IFS= read -r "$@" </dev/tty
+}
+
+prompt_inputs() {
+  local first second
+  if [ -n "${CHAT2API_PORT:-}" ]; then PORT="$CHAT2API_PORT"; else
+    read_tty -p "请输入部署端口 [$DEFAULT_PORT]: " PORT
+    PORT="${PORT:-$DEFAULT_PORT}"
   fi
-  [[ "$value" =~ ^[0-9]+$ ]] || die "端口必须是数字。"
-  [ "$value" -ge 1 ] && [ "$value" -le 65535 ] || die "端口必须在 1-65535 之间。"
-  printf '%s' "$value"
+  [[ "$PORT" =~ ^[0-9]+$ ]] && [ "$PORT" -ge 1 ] && [ "$PORT" -le 65535 ] || die "端口必须是 1-65535 的数字。"
+
+  if [ -n "${CHAT2API_ADMIN_USERNAME:-}" ]; then ADMIN_USERNAME="$CHAT2API_ADMIN_USERNAME"; else
+    read_tty -p "请输入管理员账号 [admin]: " ADMIN_USERNAME
+    ADMIN_USERNAME="${ADMIN_USERNAME:-admin}"
+  fi
+  [[ "$ADMIN_USERNAME" =~ ^[A-Za-z0-9._-]{1,64}$ ]] || die "管理员账号仅允许字母、数字、点、下划线和短横线，最长 64 位。"
+
+  if [ -n "${CHAT2API_ADMIN_PASSWORD:-}" ]; then
+    ADMIN_PASSWORD="$CHAT2API_ADMIN_PASSWORD"
+  else
+    read_tty -s -p "请输入管理员密码（至少 6 位）: " first; printf '\n' >/dev/tty
+    read_tty -s -p "请再次输入管理员密码: " second; printf '\n' >/dev/tty
+    [ "$first" = "$second" ] || die "两次输入的管理员密码不一致。"
+    ADMIN_PASSWORD="$first"
+  fi
+  [ "${#ADMIN_PASSWORD}" -ge 6 ] || die "管理员密码至少需要 6 位。"
+  [[ "$ADMIN_PASSWORD" != *$'\n'* && "$ADMIN_PASSWORD" != *$'\r'* ]] || die "管理员密码不能包含换行符。"
 }
 
 port_is_listening() {
-  local port="$1"
-  if command -v ss >/dev/null 2>&1; then
-    ss -ltn "sport = :$port" 2>/dev/null | grep -q LISTEN
-  else
-    python3 - "$port" <<'PY'
-import socket, sys
-s=socket.socket()
-try: s.bind(('0.0.0.0',int(sys.argv[1])))
-except OSError: raise SystemExit(0)
-raise SystemExit(1)
-PY
-  fi
+  ss -ltn "sport = :$1" 2>/dev/null | grep -q LISTEN
 }
 
 install_packages() {
   export DEBIAN_FRONTEND=noninteractive
   apt-get update
-  apt-get install -y ca-certificates curl git python3 openssl xvfb
-  if ! command -v node >/dev/null 2>&1; then
-    apt-get install -y nodejs
-  fi
-  if ! command -v npm >/dev/null 2>&1; then
-    apt-get install -y npm
-  fi
-  node -e 'const n=Number(process.versions.node.split(".")[0]); if(n<18) process.exit(1)' || die "需要 Node.js 18 或更高版本。"
-  command -v npm >/dev/null 2>&1 || die "未找到 npm。"
+  apt-get install -y ca-certificates curl git openssl python3 docker.io
+  systemctl enable --now docker
+  docker version >/dev/null 2>&1 || die "Docker 服务不可用。"
 }
 
 clone_source() {
-  git clone --branch main --single-branch "$FORK_REPO_URL" "$SOURCE_DIR"
-  git -C "$SOURCE_DIR" remote set-url origin "$FORK_REPO_URL"
-  SOURCE_VERSION="$(git -C "$SOURCE_DIR" rev-parse --short=12 HEAD)"
+  log "克隆 $REPOSITORY"
+  git clone --branch "$GIT_REF" --single-branch "$REPO_URL" "$SOURCE_DIR"
+  SOURCE_HEAD="$(git -C "$SOURCE_DIR" rev-parse HEAD)"
+  VERSION="$(git -C "$SOURCE_DIR" rev-parse --short=12 HEAD)"
 }
 
-build_application() {
-  log "安装依赖并构建 Fork 源码，首次执行可能需要几分钟"
-  (
-    cd "$SOURCE_DIR"
-    npm ci
-    npm run build:unpack
-  )
-  local executable
-  executable="$(find "$SOURCE_DIR/dist" -maxdepth 3 -type f -name chat2api -perm -111 -print -quit 2>/dev/null || true)"
-  [ -n "$executable" ] || die "构建完成后未找到 Linux 可执行文件。"
-  APP_EXECUTABLE="$executable"
-}
-
-configure_data() {
-  install -d -m 700 "$APP_HOME/.chat2api" "$APP_HOME/.config" "$APP_HOME/.cache"
+write_runtime_config() {
   umask 077
-  printf 'c2a_%s\n' "$(openssl rand -hex 32)" > "$KEY_FILE"
-  CHAT2API_DATA="$DATA_FILE" CHAT2API_KEY_FILE="$KEY_FILE" CHAT2API_PORT_VALUE="$PORT" python3 - <<'PY'
+  API_KEY="c2a_$(openssl rand -hex 32)"
+  STORAGE_KEY="$(openssl rand -hex 32)"
+  cat > "$ENV_FILE" <<EOF
+CHAT2API_HOST=0.0.0.0
+CHAT2API_PORT=8080
+CHAT2API_DATA_DIR=/data
+CHAT2API_ENABLE_MANAGEMENT_API=true
+CHAT2API_MANAGEMENT_SECRET=$ADMIN_PASSWORD
+CHAT2API_ADMIN_USERNAME=$ADMIN_USERNAME
+CHAT2API_ENABLE_API_KEY=true
+CHAT2API_STORAGE_ENCRYPTION_KEY=$STORAGE_KEY
+CHAT2API_LOG_LEVEL=info
+CHAT2API_LOAD_BALANCE_STRATEGY=round-robin
+EOF
+  printf '%s\n' "$API_KEY" > "$KEY_FILE"
+  printf '%s\n' "$ADMIN_USERNAME" > "$ADMIN_USER_FILE"
+  chmod 600 "$ENV_FILE" "$KEY_FILE" "$ADMIN_USER_FILE"
+
+  CHAT2API_DATA_FILE="$DATA_DIR/data.json" CHAT2API_API_KEY="$API_KEY" CHAT2API_KEY_ID="server-$PORT" python3 - <<'PY'
 import json, os, time
-p=os.environ['CHAT2API_DATA']; key=open(os.environ['CHAT2API_KEY_FILE']).read().strip(); port=int(os.environ['CHAT2API_PORT_VALUE'])
-d={'providers':[],'accounts':[],'config':{},'logs':[],'requestLogs':[],'systemPrompts':[],'sessions':[],'statistics':{},'userModelOverrides':{}}
-c=d['config']; c.update({'proxyPort':port,'proxyHost':'0.0.0.0','autoStartProxy':True,'enableApiKey':True,'apiKeys':[{'id':f'chat2api-{port}','name':'server-default','key':key,'enabled':True,'createdAt':int(time.time()*1000),'usageCount':0,'description':'Initial server API key'}]})
-t=p+'.tmp'; open(t,'w').write(json.dumps(d,ensure_ascii=False,indent=2)); os.replace(t,p)
+path=os.environ['CHAT2API_DATA_FILE']; key=os.environ['CHAT2API_API_KEY']; key_id=os.environ['CHAT2API_KEY_ID']
+data={
+  'providers': [], 'accounts': [], 'logs': [], 'requestLogs': [],
+  'systemPrompts': [], 'sessions': [], 'statistics': {}, 'userModelOverrides': {},
+  'config': {
+    'proxyPort': 8080, 'proxyHost': '0.0.0.0', 'autoStartProxy': True,
+    'enableApiKey': True,
+    'apiKeys': [{'id': key_id, 'name': 'server-default', 'key': key, 'enabled': True,
+                 'createdAt': int(time.time()*1000), 'usageCount': 0,
+                 'description': 'Generated by the interactive installer'}]
+  }
+}
+tmp=path+'.tmp'
+with open(tmp,'w',encoding='utf-8') as f: json.dump(data,f,ensure_ascii=False,indent=2)
+os.replace(tmp,path)
 PY
-  chmod 600 "$KEY_FILE" "$DATA_FILE"
+  chmod 600 "$DATA_DIR/data.json"
 }
 
-write_runtime() {
-  cat > "$LAUNCHER" <<EOF
-#!/usr/bin/env bash
-set -euo pipefail
-export HOME="$APP_HOME"
-export ELECTRON_DISABLE_GPU=1
-exec /usr/bin/xvfb-run --auto-servernum --server-args="-screen 0 1024x768x24" "$APP_EXECUTABLE" --no-sandbox --disable-gpu
-EOF
-  chmod 700 "$LAUNCHER"
-  cat > "$UNIT_FILE" <<EOF
-[Unit]
-Description=Chat2API fork instance on port $PORT
-After=network-online.target
-Wants=network-online.target
+build_image() {
+  IMAGE_TAG="chat2api-qingan:${PORT}-${VERSION}"
+  log "构建原生 WebUI 服务镜像 $IMAGE_TAG"
+  docker build -t "$IMAGE_TAG" "$SOURCE_DIR"
+}
 
-[Service]
-Type=simple
-User=root
-WorkingDirectory=$(dirname "$APP_EXECUTABLE")
-ExecStart=$LAUNCHER
-Restart=on-failure
-RestartSec=5
-TimeoutStopSec=30
-
-[Install]
-WantedBy=multi-user.target
-EOF
+write_meta() {
   cat > "$META_FILE" <<EOF
-TYPE=fork
+TYPE=$DEPLOY_TYPE
 PROJECT_NAME=$PROJECT_NAME
 PORT=$PORT
-VERSION=$SOURCE_VERSION
+VERSION=$VERSION
+SOURCE_HEAD=$SOURCE_HEAD
 APP_DIR=$APP_DIR
-SERVICE_NAME=$SERVICE_NAME
-REPOSITORY=qingan123/Chat2API
 SOURCE_DIR=$SOURCE_DIR
+DATA_DIR=$DATA_DIR
+ENV_FILE=$ENV_FILE
+KEY_FILE=$KEY_FILE
+ADMIN_USER_FILE=$ADMIN_USER_FILE
+CONTAINER_NAME=$CONTAINER_NAME
+IMAGE_TAG=$IMAGE_TAG
+REPOSITORY=$REPOSITORY
 EOF
   chmod 600 "$META_FILE"
-  systemctl daemon-reload
-  systemctl enable --now "$SERVICE_NAME.service"
 }
 
-verify_service() {
-  local i health="" ready=0 unauth auth key
-  for i in $(seq 1 90); do
-    if health="$(curl -fsS --max-time 2 "http://127.0.0.1:$PORT/health" 2>/dev/null)" && python3 -c 'import json,sys; assert json.load(sys.stdin).get("status")=="running"' <<<"$health" 2>/dev/null; then ready=1; break; fi
-    sleep 1
+start_container() {
+  docker run -d \
+    --name "$CONTAINER_NAME" \
+    --restart unless-stopped \
+    --env-file "$ENV_FILE" \
+    -p "${PORT}:8080" \
+    -v "$DATA_DIR:/data" \
+    "$IMAGE_TAG" >/dev/null
+}
+
+verify_instance() {
+  local i health code key
+  for i in $(seq 1 120); do
+    if health="$(curl -fsS --max-time 3 "http://127.0.0.1:$PORT/health" 2>/dev/null)" && \
+       python3 -c 'import json,sys; assert json.load(sys.stdin).get("status")=="running"' <<<"$health" 2>/dev/null; then break; fi
+    if [ "$i" -eq 120 ]; then docker logs --tail 150 "$CONTAINER_NAME" || true; die "健康检查超时。"; fi
+    sleep 2
   done
-  [ "$ready" -eq 1 ] || { journalctl -u "$SERVICE_NAME" -n 100 --no-pager || true; die "健康检查超时。"; }
-  unauth="$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/v1/models")"
-  [ "$unauth" = 401 ] || die "未认证模型接口应返回 401，实际为 $unauth。"
+  code="$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/admin/")"
+  [ "$code" = 200 ] || die "管理页面应返回 200，实际为 $code。"
+  code="$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $ADMIN_PASSWORD" -H 'X-Admin-Username: invalid-user' "http://127.0.0.1:$PORT/v0/management/health")"
+  [ "$code" = 401 ] || die "错误管理员账号应返回 401，实际为 $code。"
+  code="$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $ADMIN_PASSWORD" -H "X-Admin-Username: $ADMIN_USERNAME" "http://127.0.0.1:$PORT/v0/management/health")"
+  [ "$code" = 200 ] || die "正确管理员账号密码应返回 200，实际为 $code。"
+  code="$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/v1/models")"
+  [ "$code" = 401 ] || die "未认证模型接口应返回 401，实际为 $code。"
   key="$(<"$KEY_FILE")"
-  auth="$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $key" "http://127.0.0.1:$PORT/v1/models")"
-  [ "$auth" = 200 ] || die "带 API Key 的模型接口应返回 200，实际为 $auth。"
+  code="$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $key" "http://127.0.0.1:$PORT/v1/models")"
+  [ "$code" = 200 ] || die "API Key 验证失败，模型接口返回 $code。"
+  docker restart "$CONTAINER_NAME" >/dev/null
+  for i in $(seq 1 60); do curl -fsS --max-time 3 "http://127.0.0.1:$PORT/health" >/dev/null 2>&1 && return; sleep 2; done
+  die "容器重启后健康检查失败。"
 }
 
 print_result() {
   local public_host="${PUBLIC_HOST:-}"
   [ -n "$public_host" ] || public_host="$(curl -4fsS --max-time 8 https://api.ipify.org 2>/dev/null || true)"
-  printf '\n部署完成：%s %s\n' "$PROJECT_NAME" "$SOURCE_VERSION"
+  printf '\n部署完成：%s %s\n' "$PROJECT_NAME" "$VERSION"
   printf '安装目录：%s\n' "$APP_DIR"
+  printf '管理员账号文件：%s\n' "$ADMIN_USER_FILE"
+  printf '管理员密码：使用安装时输入的密码（不会写入输出）\n'
+  printf 'API Key 文件：%s（仅 root 可读）\n' "$KEY_FILE"
+  printf '本机管理后台：http://127.0.0.1:%s/admin/\n' "$PORT"
   printf '本机 OpenAI Base URL：http://127.0.0.1:%s/v1\n' "$PORT"
-  if [ -n "$public_host" ]; then printf '公网 OpenAI Base URL：http://%s:%s/v1\n' "$public_host" "$PORT"; else printf '公网地址探测失败，请自行使用服务器公网地址。\n'; fi
-  printf 'API Key 文件：%s（仅 root 可读，脚本不会显示密钥）\n' "$KEY_FILE"
-  printf '服务状态：systemctl status %s --no-pager\n' "$SERVICE_NAME"
-  printf '实时日志：journalctl -u %s -f\n' "$SERVICE_NAME"
+  if [ -n "$public_host" ]; then
+    printf '公网管理后台：http://%s:%s/admin/\n' "$public_host" "$PORT"
+    printf '公网 OpenAI Base URL：http://%s:%s/v1\n' "$public_host" "$PORT"
+  else
+    printf '公网地址探测失败；可设置 PUBLIC_HOST 后使用实际公网地址。\n'
+  fi
+  printf '容器状态：docker ps --filter name=^/%s$\n' "$CONTAINER_NAME"
+  printf '实时日志：docker logs -f %s\n' "$CONTAINER_NAME"
   printf '注意：请另行确认云安全组、UFW、NAT 或反向代理已放行端口 %s。\n' "$PORT"
 }
 
 main() {
   require_root
-  PORT="$(prompt_port)"
+  prompt_inputs
   APP_DIR="${APP_DIR_BASE:-/opt/chat2api-$PORT}"
   SOURCE_DIR="$APP_DIR/source"
-  APP_HOME="$APP_DIR/home"
+  DATA_DIR="$APP_DIR/data"
+  ENV_FILE="$APP_DIR/runtime.env"
   KEY_FILE="$APP_DIR/api-key.txt"
-  DATA_FILE="$APP_HOME/.chat2api/data.json"
-  LAUNCHER="$APP_DIR/run-chat2api.sh"
+  ADMIN_USER_FILE="$APP_DIR/admin-username.txt"
   META_FILE="$APP_DIR/.chat2api-deploy"
-  SERVICE_NAME="chat2api-$PORT"
-  UNIT_FILE="/etc/systemd/system/$SERVICE_NAME.service"
+  CONTAINER_NAME="chat2api-$PORT"
   port_is_listening "$PORT" && die "端口 $PORT 已被占用。"
   [ ! -e "$APP_DIR" ] || die "安装目录已存在：$APP_DIR；请使用更新脚本。"
   install_packages
   install -d -m 755 "$APP_DIR"
+  install -d -m 700 "$DATA_DIR"
   clone_source
-  build_application
-  configure_data
-  write_runtime
-  verify_service
+  write_runtime_config
+  build_image
+  write_meta
+  start_container
+  verify_instance
   print_result
 }
 main "$@"
