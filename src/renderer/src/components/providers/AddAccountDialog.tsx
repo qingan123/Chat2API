@@ -30,6 +30,7 @@ import {
   Check
 } from 'lucide-react'
 import type { Provider, CredentialField, Account, BuiltinProviderConfig, ProviderVendor } from '@/types/electron'
+import { CredentialImportPanel } from './CredentialImportPanel'
 
 /**
  * Map OAuth credentials to provider credential field names
@@ -261,6 +262,7 @@ export function AddAccountDialog({
   const supportsOAuth = provider && ['deepseek', 'glm', 'kimi', 'mimo', 'minimax', 'qwen', 'qwen-ai', 'zai', 'perplexity'].includes(provider.id)
   const isDockerWebAdmin = !!window.__CHAT2API_WEB_ADMIN__
   const supportsBrowserImport = isDockerWebAdmin && provider && ['qwen', 'qwen-ai', 'kimi'].includes(provider.id)
+  const supportsCredentialImport = provider && ['deepseek', 'glm', 'kimi', 'mimo', 'minimax', 'qwen', 'qwen-ai', 'zai', 'perplexity'].includes(provider.id)
 
   useEffect(() => {
     if (open) {
@@ -616,6 +618,9 @@ export function AddAccountDialog({
                 </TabsList>
 
                 <TabsContent value="manual" className="mt-4">
+                  {supportsCredentialImport && provider && (
+                    <CredentialImportPanel providerId={provider.id} onApply={parsed => { setCredentials(prev => ({ ...prev, ...parsed })); setValidationResult({}) }} t={t} />
+                  )}
                   <CredentialFieldsForm
                     fields={credentialFields}
                     credentials={credentials}
@@ -760,13 +765,12 @@ export function AddAccountDialog({
             )}
 
             {(!supportsOAuth || isEditing) && (
-              <CredentialFieldsForm
-                fields={credentialFields}
-                credentials={credentials}
-                onChange={handleCredentialChange}
-                t={t}
-                providerId={provider?.id}
-              />
+              <div className="space-y-4">
+                {supportsCredentialImport && provider && (
+                  <CredentialImportPanel providerId={provider.id} onApply={parsed => { setCredentials(prev => ({ ...prev, ...parsed })); setValidationResult({}) }} t={t} />
+                )}
+                <CredentialFieldsForm fields={credentialFields} credentials={credentials} onChange={handleCredentialChange} t={t} providerId={provider?.id} />
+              </div>
             )}
 
             {validationResult.error && (

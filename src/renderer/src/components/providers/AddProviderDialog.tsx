@@ -16,6 +16,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Check, Plus, ArrowRight, Loader2, ExternalLink, AlertCircle, CheckCircle2, ArrowLeft, Info, Eye, EyeOff, Copy } from 'lucide-react'
 import type { BuiltinProviderConfig, ProviderVendor } from '@/types/electron'
+import { CredentialImportPanel } from './CredentialImportPanel'
 import { cn } from '@/lib/utils'
 import deepseekIcon from '@/assets/providers/deepseek.svg'
 import glmIcon from '@/assets/providers/glm.svg'
@@ -307,6 +308,7 @@ export function AddProviderDialog({
   const supportsOAuth = selectedProviderData && ['deepseek', 'glm', 'kimi', 'mimo', 'minimax', 'qwen', 'qwen-ai', 'zai', 'perplexity'].includes(selectedProviderData.id)
   const isDockerWebAdmin = !!window.__CHAT2API_WEB_ADMIN__
   const supportsBrowserImport = isDockerWebAdmin && selectedProviderData && ['qwen', 'qwen-ai', 'kimi'].includes(selectedProviderData.id)
+  const supportsCredentialImport = selectedProviderData && ['deepseek', 'glm', 'kimi', 'mimo', 'minimax', 'qwen', 'qwen-ai', 'zai', 'perplexity'].includes(selectedProviderData.id)
   const oauthRefreshCredentialFields = selectedProviderData?.id === 'qwen-ai'
     ? selectedProviderData.credentialFields.filter(field => ['email', 'password'].includes(field.name))
     : []
@@ -1020,6 +1022,9 @@ export function AddProviderDialog({
             </TabsList>
 
             <TabsContent value="manual" className="mt-4">
+              {supportsCredentialImport && selectedProviderData && (
+                <CredentialImportPanel providerId={selectedProviderData.id} onApply={parsed => { setCredentials(prev => ({ ...prev, ...parsed })); setValidationResult({}) }} t={t} />
+              )}
               {renderCredentialFields()}
             </TabsContent>
 
@@ -1105,6 +1110,11 @@ export function AddProviderDialog({
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-6 space-y-4">
+                  {isDockerWebAdmin && selectedProviderData && (
+                    <div className="w-full rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                      {t('providers.dockerOAuthUnavailable')}
+                    </div>
+                  )}
                   {oauthRefreshCredentialFields.length > 0 && (
                     <div className="w-full rounded-lg border p-3">
                       {renderCredentialFields(oauthRefreshCredentialFields)}

@@ -23,6 +23,7 @@ export default defineConfig({
         'server/managementSecretService': resolve(__dirname, 'src/server/managementSecretService.ts'),
         'main/data/builtin-prompt-extensions': resolve(__dirname, 'src/main/data/builtin-prompt-extensions.ts'),
         'main/proxy/services/promptExtensionService': resolve(__dirname, 'src/main/proxy/services/promptExtensionService.ts'),
+        'shared/credentialImport': resolve(__dirname, 'src/shared/credentialImport.ts'),
         'main/runtime/nodeRuntime': resolve(__dirname, 'src/main/runtime/nodeRuntime.ts'),
         'main/store/storage/nodeJsonStore': resolve(__dirname, 'src/main/store/storage/nodeJsonStore.ts'),
       },
