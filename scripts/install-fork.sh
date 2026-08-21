@@ -40,8 +40,15 @@ PY
 install_packages() {
   export DEBIAN_FRONTEND=noninteractive
   apt-get update
-  apt-get install -y ca-certificates curl git nodejs npm python3 openssl xvfb
+  apt-get install -y ca-certificates curl git python3 openssl xvfb
+  if ! command -v node >/dev/null 2>&1; then
+    apt-get install -y nodejs
+  fi
+  if ! command -v npm >/dev/null 2>&1; then
+    apt-get install -y npm
+  fi
   node -e 'const n=Number(process.versions.node.split(".")[0]); if(n<18) process.exit(1)' || die "需要 Node.js 18 或更高版本。"
+  command -v npm >/dev/null 2>&1 || die "未找到 npm。"
 }
 
 clone_source() {
