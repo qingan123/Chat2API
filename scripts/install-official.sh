@@ -25,22 +25,20 @@ prompt_inputs() {
   fi
   [[ "$PORT" =~ ^[0-9]+$ ]] && [ "$PORT" -ge 1 ] && [ "$PORT" -le 65535 ] || die "端口必须是 1-65535 的数字。"
 
-  if [ -n "${CHAT2API_ADMIN_USERNAME:-}" ]; then ADMIN_USERNAME="$CHAT2API_ADMIN_USERNAME"; else
-    read_tty -p "请输入管理员账号 [admin]: " ADMIN_USERNAME
-    ADMIN_USERNAME="${ADMIN_USERNAME:-admin}"
-  fi
-  [[ "$ADMIN_USERNAME" =~ ^[A-Za-z0-9._-]{1,64}$ ]] || die "管理员账号仅允许字母、数字、点、下划线和短横线，最长 64 位。"
-
-  if [ -n "${CHAT2API_ADMIN_PASSWORD:-}" ]; then
-    ADMIN_PASSWORD="$CHAT2API_ADMIN_PASSWORD"
+  if [ -n "${CHAT2API_MANAGEMENT_SECRET:-}" ]; then
+    MANAGEMENT_SECRET="$CHAT2API_MANAGEMENT_SECRET"
   else
-    read_tty -s -p "请输入管理员密码（至少 6 位）: " first; printf '\n' >/dev/tty
-    read_tty -s -p "请再次输入管理员密码: " second; printf '\n' >/dev/tty
-    [ "$first" = "$second" ] || die "两次输入的管理员密码不一致。"
-    ADMIN_PASSWORD="$first"
+    read_tty -s -p "请输入 Management Secret（留空自动生成）: " first; printf '\n' >/dev/tty
+    if [ -n "$first" ]; then
+      read_tty -s -p "请再次输入 Management Secret: " second; printf '\n' >/dev/tty
+      [ "$first" = "$second" ] || die "两次输入的 Management Secret 不一致。"
+      MANAGEMENT_SECRET="$first"
+    else
+      MANAGEMENT_SECRET="mgmt_$(openssl rand -hex 32)"
+    fi
   fi
-  [ "${#ADMIN_PASSWORD}" -ge 6 ] || die "管理员密码至少需要 6 位。"
-  [[ "$ADMIN_PASSWORD" != *$'\n'* && "$ADMIN_PASSWORD" != *$'\r'* ]] || die "管理员密码不能包含换行符。"
+  [ "${#MANAGEMENT_SECRET}" -ge 6 ] || die "Management Secret 至少需要 6 位。"
+  [[ "$MANAGEMENT_SECRET" != *$'\n'* && "$MANAGEMENT_SECRET" != *$'\r'* ]] || die "Management Secret 不能包含换行符。"
 }
 
 port_is_listening() {
@@ -74,14 +72,13 @@ CHAT2API_HOST=0.0.0.0
 CHAT2API_PORT=8080
 CHAT2API_DATA_DIR=/data
 CHAT2API_ENABLE_MANAGEMENT_API=true
-CHAT2API_MANAGEMENT_SECRET=$ADMIN_PASSWORD
-CHAT2API_ADMIN_USERNAME=$ADMIN_USERNAME
+CHAT2API_MANAGEMENT_SECRET=$MANAGEMENT_SECRET
 CHAT2API_ENABLE_API_KEY=true
 CHAT2API_STORAGE_ENCRYPTION_KEY=$STORAGE_KEY
 EOF
   printf '%s\n' "$API_KEY" > "$KEY_FILE"
-  printf '%s\n' "$ADMIN_USERNAME" > "$ADMIN_USER_FILE"
-  chmod 600 "$ENV_FILE" "$KEY_FILE" "$ADMIN_USER_FILE"
+  printf '%s\n' "$MANAGEMENT_SECRET" > "$SECRET_FILE"
+  chmod 600 "$ENV_FILE" "$KEY_FILE" "$SECRET_FILE"
 
   CHAT2API_DATA_FILE="$DATA_DIR/data.json" CHAT2API_API_KEY="$API_KEY" CHAT2API_KEY_ID="server-$PORT" python3 - <<'PY'
 import json, os, time
@@ -105,7 +102,7 @@ PY
 }
 
 build_image() {
-  IMAGE_TAG="chat2api-qingan:${PORT}-${VERSION}"
+  IMAGE_TAG="chat2api-py-upstream:${PORT}-${VERSION}"
   log "构建原生 WebUI 服务镜像 $IMAGE_TAG"
   docker build -t "$IMAGE_TAG" "$SOURCE_DIR"
 }
@@ -113,6 +110,8 @@ build_image() {
 write_meta() {
   cat > "$META_FILE" <<EOF
 TYPE=$DEPLOY_TYPE
+SCHEMA_VERSION=2
+AUTH_MODE=management-secret
 PROJECT_NAME=$PROJECT_NAME
 PORT=$PORT
 VERSION=$VERSION
@@ -122,7 +121,7 @@ SOURCE_DIR=$SOURCE_DIR
 DATA_DIR=$DATA_DIR
 ENV_FILE=$ENV_FILE
 KEY_FILE=$KEY_FILE
-ADMIN_USER_FILE=$ADMIN_USER_FILE
+SECRET_FILE=$SECRET_FILE
 CONTAINER_NAME=$CONTAINER_NAME
 IMAGE_TAG=$IMAGE_TAG
 REPOSITORY=$REPOSITORY
@@ -151,10 +150,10 @@ verify_instance() {
   done
   code="$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/admin/")"
   [ "$code" = 200 ] || die "管理页面应返回 200，实际为 $code。"
-  code="$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $ADMIN_PASSWORD" -H 'X-Admin-Username: invalid-user' "http://127.0.0.1:$PORT/v0/management/health")"
-  [ "$code" = 401 ] || die "错误管理员账号应返回 401，实际为 $code。"
-  code="$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $ADMIN_PASSWORD" -H "X-Admin-Username: $ADMIN_USERNAME" "http://127.0.0.1:$PORT/v0/management/health")"
-  [ "$code" = 200 ] || die "正确管理员账号密码应返回 200，实际为 $code。"
+  code="$(curl -sS -o /dev/null -w '%{http_code}' -H 'Authorization: Bearer invalid-management-secret' "http://127.0.0.1:$PORT/v0/management/health")"
+  [ "$code" = 401 ] || die "错误 Management Secret 应返回 401，实际为 $code。"
+  code="$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $MANAGEMENT_SECRET" "http://127.0.0.1:$PORT/v0/management/health")"
+  [ "$code" = 200 ] || die "正确 Management Secret 应返回 200，实际为 $code。"
   code="$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/v1/models")"
   [ "$code" = 401 ] || die "未认证模型接口应返回 401，实际为 $code。"
   key="$(<"$KEY_FILE")"
@@ -170,8 +169,7 @@ print_result() {
   [ -n "$public_host" ] || public_host="$(curl -4fsS --max-time 8 https://api.ipify.org 2>/dev/null || true)"
   printf '\n部署完成：%s %s\n' "$PROJECT_NAME" "$VERSION"
   printf '安装目录：%s\n' "$APP_DIR"
-  printf '管理员账号文件：%s\n' "$ADMIN_USER_FILE"
-  printf '管理员密码：使用安装时输入的密码（不会写入输出）\n'
+  printf 'Management Secret 文件：%s（仅 root 可读）\n' "$SECRET_FILE"
   printf 'API Key 文件：%s（仅 root 可读）\n' "$KEY_FILE"
   printf '本机管理后台：http://127.0.0.1:%s/admin/\n' "$PORT"
   printf '本机 OpenAI Base URL：http://127.0.0.1:%s/v1\n' "$PORT"
@@ -194,7 +192,7 @@ main() {
   DATA_DIR="$APP_DIR/data"
   ENV_FILE="$APP_DIR/runtime.env"
   KEY_FILE="$APP_DIR/api-key.txt"
-  ADMIN_USER_FILE="$APP_DIR/admin-username.txt"
+  SECRET_FILE="$APP_DIR/management-secret.txt"
   META_FILE="$APP_DIR/.chat2api-deploy"
   CONTAINER_NAME="chat2api-py-upstream-$PORT"
   port_is_listening "$PORT" && die "端口 $PORT 已被占用。"

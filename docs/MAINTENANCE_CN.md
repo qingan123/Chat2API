@@ -2,6 +2,25 @@
 
 本仓库 `qingan123/Chat2API` 以 `pyf-feifei/Chat2API` 为功能基线，并保留 `xiaoY233/Chat2API` 作为官方对比源。本文用于后续维护、上游同步、冲突处理、测试和生产更新。
 
+## 0. 当前已核对的版本基线
+
+核对日期：**2026年8月21日**。
+
+| 来源 | HEAD | 最近提交时间 |
+|---|---|---|
+| 官方 `xiaoY233/Chat2API` | `59f03ab2988867a4d7bacb97d98f3ee018b0e4d0` | 2026年5月28日 |
+| Py `pyf-feifei/Chat2API` | `1846e14193e87951e6d11ac6e8c46049a2e7c33e` | 2026年8月18日 |
+
+当次核对结果：
+
+- 官方 HEAD 是 Py HEAD 的直接祖先；
+- Py 相对官方：`ahead 63 / behind 0`；
+- 文件变化：新增 136、修改 98、删除 0；
+- 没有发现官方文件被删除或重命名；
+- 因此当前 Py 不是落后官方的旧分支，而是在完整官方基线上增加 WebUI、Node/Docker 服务端、Responses/Gemini 兼容、Qwen 与工具调用等增强。
+
+上述结论只代表该日期的提交状态。每次维护都必须重新运行第 3 节命令，不能永久假设 Py 一直不落后官方。如果 `py-upstream/main..official/main` 出现提交，先停止同步和生产更新，逐项判断官方新增内容是否已经被 Py 以其他提交吸收。
+
 ## 1. 仓库关系
 
 | 名称 | 仓库 | 用途 |
@@ -10,7 +29,7 @@
 | `py-upstream` | `pyf-feifei/Chat2API` | 日常功能基线，包含原生 WebUI、Docker/Node 服务端和 Qwen 增强 |
 | `official` | `xiaoY233/Chat2API` | 官方基线，用于检查新功能、安全修复和上游差异 |
 
-生产服务器只能部署或更新 `origin/main`。不要让生产更新脚本直接覆盖为 `official/main`，否则会丢失 WebUI、服务器运行模式、管理员账号登录和本仓库脚本。
+生产服务器只能部署或更新 `origin/main`。不要让生产更新脚本直接覆盖为 `official/main`，否则会丢失 WebUI、服务器运行模式、Py 增强和本仓库脚本。
 
 ## 2. 首次配置远程
 
@@ -91,8 +110,8 @@ git commit -m "chore: sync py upstream"
    - `scripts/update.sh`
    - `docs/MAINTENANCE_CN.md`
    - README 最前面的部署区块
-   - `CHAT2API_ADMIN_USERNAME` 管理员账号校验
-   - WebUI 中文管理员账号/密码登录页
+   - Py 原生 Management Secret 认证协议
+   - WebUI 原生 Management Secret 登录页
 4. 解决后执行完整测试门禁。
 
 放弃本次合并：
@@ -177,14 +196,25 @@ npm audit
 
 审计报告需要逐项评估。不要未经验证运行 `npm audit fix --force`，它可能升级 Electron/Vite 等关键依赖并造成破坏性变化。
 
-### 7.4 必做运行验收
+2026年8月21日基线审计结果：43 项（2 low、9 moderate、31 high、1 critical）。该数字来自当前上游锁文件，不代表本仓库新增了这些漏洞；发布时仍必须记录并评估实际运行路径。
+
+### 7.4 已知上游测试基线问题
+
+在纯净 `pyf-feifei/Chat2API@1846e14193e87951e6d11ac6e8c46049a2e7c33e` 中已独立复现：
+
+- `Qwen AI stream does not let undeclared native tool events reset the idle timer` 期望 504，但因 `mergeNativeToolName is not a function` 返回 502；
+- `npm run test:server-compat` 跑到第 511 项后 Node 测试进程存在开放句柄，不能自然退出。
+
+因此在该上游提交上，不得把完整兼容套件报告为全绿。本仓库聚焦的 WebUI、bootstrap、Node runtime 与静态资源测试可以单独通过。后续同步 Py 新提交时应优先复测这两个基线问题；如果上游修复，再移除此记录。
+
+### 7.5 必做运行验收
 
 在隔离端口部署，至少验证：
 
 1. `/health` 返回 `status=running`。
 2. `/admin/` 正常加载静态资源。
-3. 错误管理员账号返回 401。
-4. 正确管理员账号和密码可以登录。
+3. 错误 Management Secret 返回 401。
+4. 正确 Management Secret 可以登录。
 5. 未携带 API Key 的 `/v1/models` 返回 401。
 6. 正确 API Key 的 `/v1/models` 返回 200。
 7. 后台修改一项非敏感设置后刷新仍然保留。
@@ -241,7 +271,7 @@ git checkout -b recovery/<说明> <备份标签>
 /opt/chat2api-<端口>/backups/update-<UTC时间>/
 ```
 
-保留内容包括数据目录、运行环境、API Key、管理员账号文件和部署元数据。不要删除最近一次成功更新前的备份，直到真实流量验收完成。
+保留内容包括数据目录、运行环境、API Key、Management Secret 文件和部署元数据。不要删除最近一次成功更新前的备份，直到真实流量验收完成。
 
 ## 10. 本仓库部署模型
 

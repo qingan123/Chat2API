@@ -7,11 +7,11 @@ require_root() { [ "$(id -u)" -eq 0 ] || die "请使用 root 或 sudo 执行。"
 
 load_meta() {
   local file="$1" key value
-  TYPE=""; PROJECT_NAME=""; PORT=""; VERSION=""; SOURCE_HEAD=""; APP_DIR=""; SOURCE_DIR=""; DATA_DIR=""
-  ENV_FILE=""; KEY_FILE=""; ADMIN_USER_FILE=""; CONTAINER_NAME=""; IMAGE_TAG=""; REPOSITORY=""; GIT_REF="main"
+  TYPE=""; SCHEMA_VERSION=""; AUTH_MODE=""; PROJECT_NAME=""; PORT=""; VERSION=""; SOURCE_HEAD=""; APP_DIR=""; SOURCE_DIR=""; DATA_DIR=""
+  ENV_FILE=""; KEY_FILE=""; SECRET_FILE=""; CONTAINER_NAME=""; IMAGE_TAG=""; REPOSITORY=""; GIT_REF="main"
   while IFS='=' read -r key value; do
     case "$key" in
-      TYPE|PROJECT_NAME|PORT|VERSION|SOURCE_HEAD|APP_DIR|SOURCE_DIR|DATA_DIR|ENV_FILE|KEY_FILE|ADMIN_USER_FILE|CONTAINER_NAME|IMAGE_TAG|REPOSITORY|GIT_REF)
+      TYPE|SCHEMA_VERSION|AUTH_MODE|PROJECT_NAME|PORT|VERSION|SOURCE_HEAD|APP_DIR|SOURCE_DIR|DATA_DIR|ENV_FILE|KEY_FILE|SECRET_FILE|CONTAINER_NAME|IMAGE_TAG|REPOSITORY|GIT_REF)
         printf -v "$key" '%s' "$value" ;;
     esac
   done < "$file"
@@ -24,7 +24,9 @@ discover_instances() {
   shopt -s nullglob
   for file in /opt/chat2api-*/.chat2api-deploy /opt/chat2api-py-upstream-*/.chat2api-deploy; do
     case "$seen" in *"|$file|"*) continue;; esac
-    if load_meta "$file" && [[ "$TYPE" =~ ^(fork|py-upstream)$ ]]; then META_FILES+=("$file"); seen+="$file|"; fi
+    if load_meta "$file" && [[ "$TYPE" =~ ^(fork|py-upstream)$ ]] && [ "$SCHEMA_VERSION" = 2 ] && [ "$AUTH_MODE" = management-secret ]; then
+      META_FILES+=("$file"); seen+="$file|"
+    fi
   done
   shopt -u nullglob
   [ "${#META_FILES[@]}" -gt 0 ] || die "未发现新版 WebUI 部署实例。旧 Electron 实例不会由本脚本更新。"
@@ -61,26 +63,21 @@ backup_persistent() {
   BACKUP_DIR="$APP_DIR/backups/update-$(date -u +%Y%m%dT%H%M%SZ)"
   install -d -m 700 "$BACKUP_DIR"
   cp -a "$DATA_DIR" "$BACKUP_DIR/data"
-  cp -a "$ENV_FILE" "$KEY_FILE" "$ADMIN_USER_FILE" "$SELECTED_META" "$BACKUP_DIR/"
+  cp -a "$ENV_FILE" "$KEY_FILE" "$SECRET_FILE" "$SELECTED_META" "$BACKUP_DIR/"
 }
 
 verify_instance() {
-  local i code key admin_user admin_password
-  admin_user="$(<"$ADMIN_USER_FILE")"
-  admin_password="$(python3 - "$ENV_FILE" <<'PY'
-import sys
-for line in open(sys.argv[1],encoding='utf-8'):
-    if line.startswith('CHAT2API_MANAGEMENT_SECRET='):
-        print(line.rstrip('\n').split('=',1)[1]); break
-PY
-)"
+  local i code key management_secret
+  management_secret="$(<"$SECRET_FILE")"
   for i in $(seq 1 120); do
     curl -fsS --max-time 3 "http://127.0.0.1:$PORT/health" | python3 -c 'import json,sys; assert json.load(sys.stdin).get("status")=="running"' >/dev/null 2>&1 && break
     [ "$i" -lt 120 ] || return 1
     sleep 2
   done
   code="$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/admin/")"; [ "$code" = 200 ] || return 1
-  code="$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $admin_password" -H "X-Admin-Username: $admin_user" "http://127.0.0.1:$PORT/v0/management/health")"; [ "$code" = 200 ] || return 1
+  code="$(curl -sS -o /dev/null -w '%{http_code}' -H 'Authorization: Bearer invalid-management-secret' "http://127.0.0.1:$PORT/v0/management/health")"; [ "$code" = 401 ] || return 1
+  code="$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $management_secret" "http://127.0.0.1:$PORT/v0/management/health")"; [ "$code" = 200 ] || return 1
+  code="$(curl -sS -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/v1/models")"; [ "$code" = 401 ] || return 1
   key="$(<"$KEY_FILE")"
   code="$(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $key" "http://127.0.0.1:$PORT/v1/models")"; [ "$code" = 200 ]
 }
