@@ -8,10 +8,10 @@ require_root() { [ "$(id -u)" -eq 0 ] || die "请使用 root 或 sudo 执行。"
 load_meta() {
   local file="$1" key value
   TYPE=""; PROJECT_NAME=""; PORT=""; VERSION=""; SOURCE_HEAD=""; APP_DIR=""; SOURCE_DIR=""; DATA_DIR=""
-  ENV_FILE=""; KEY_FILE=""; ADMIN_USER_FILE=""; CONTAINER_NAME=""; IMAGE_TAG=""; REPOSITORY=""
+  ENV_FILE=""; KEY_FILE=""; ADMIN_USER_FILE=""; CONTAINER_NAME=""; IMAGE_TAG=""; REPOSITORY=""; GIT_REF="main"
   while IFS='=' read -r key value; do
     case "$key" in
-      TYPE|PROJECT_NAME|PORT|VERSION|SOURCE_HEAD|APP_DIR|SOURCE_DIR|DATA_DIR|ENV_FILE|KEY_FILE|ADMIN_USER_FILE|CONTAINER_NAME|IMAGE_TAG|REPOSITORY)
+      TYPE|PROJECT_NAME|PORT|VERSION|SOURCE_HEAD|APP_DIR|SOURCE_DIR|DATA_DIR|ENV_FILE|KEY_FILE|ADMIN_USER_FILE|CONTAINER_NAME|IMAGE_TAG|REPOSITORY|GIT_REF)
         printf -v "$key" '%s' "$value" ;;
     esac
   done < "$file"
@@ -106,8 +106,8 @@ update_instance() {
   [ -z "$(git -C "$SOURCE_DIR" status --porcelain --untracked-files=no)" ] || die "源码存在已跟踪修改，已停止更新。"
   OLD_HEAD="$(git -C "$SOURCE_DIR" rev-parse HEAD)"
   OLD_IMAGE="$IMAGE_TAG"
-  git -C "$SOURCE_DIR" fetch origin main --prune
-  NEW_HEAD="$(git -C "$SOURCE_DIR" rev-parse origin/main)"
+  git -C "$SOURCE_DIR" fetch origin "refs/heads/$GIT_REF:refs/remotes/origin/$GIT_REF" --prune
+  NEW_HEAD="$(git -C "$SOURCE_DIR" rev-parse "origin/$GIT_REF")"
   if [ "$OLD_HEAD" = "$NEW_HEAD" ]; then
     log "$PROJECT_NAME 已是最新版本 $VERSION。仍将重建并验收当前版本。"
   else
