@@ -12,6 +12,7 @@ import type {
   QwenAiGovernorConfig,
   QwenAiGovernorStatus,
   SystemPrompt,
+  SkillExtension,
 } from './types/electron'
 
 const MANAGEMENT_SECRET_KEY = 'chat2api.managementSecret'
@@ -951,6 +952,16 @@ const prompts = {
     return true
   },
   getByType: (type: string) => managementFetch<SystemPrompt[]>(`/prompts/type/${encodeURIComponent(type)}`),
+  resetBuiltin: (id: string) => managementFetch<SystemPrompt | null>(`/prompts/${encodeURIComponent(id)}/reset`, { method: 'POST' }),
+}
+
+const skills = {
+  getAll: (): Promise<SkillExtension[]> => managementFetch<SkillExtension[]>('/skills'),
+  getById: (id: string): Promise<SkillExtension | undefined> => managementFetch(`/skills/${encodeURIComponent(id)}`),
+  add: (skill: Omit<SkillExtension, 'id' | 'createdAt' | 'updatedAt'>) => managementFetch<SkillExtension>('/skills', { method: 'POST', body: JSON.stringify(skill) }),
+  update: (id: string, updates: Partial<SkillExtension>) => managementFetch<SkillExtension | null>(`/skills/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(updates) }),
+  delete: async (id: string): Promise<boolean> => { await managementFetch(`/skills/${encodeURIComponent(id)}`, { method: 'DELETE' }); return true },
+  resetBuiltin: (id: string) => managementFetch<SkillExtension | null>(`/skills/${encodeURIComponent(id)}/reset`, { method: 'POST' }),
 }
 
 const session = {
@@ -1001,6 +1012,14 @@ const managementApi = {
     const secret = await managementFetch<string>('/management-api/generate-secret', { method: 'POST' })
     setManagementSecret(secret)
     return secret
+  },
+  changeSecret: async (newSecret: string, confirmSecret: string) => {
+    const result = await managementFetch<{ changed: true }>('/management-api/secret', {
+      method: 'PUT',
+      body: JSON.stringify({ newSecret, confirmSecret }),
+    })
+    setManagementSecret(newSecret)
+    return result
   },
 }
 
@@ -1101,6 +1120,10 @@ async function invoke(channel: string, ...args: unknown[]): Promise<unknown> {
       return managementApi.updateConfig(args[0] as Partial<AppConfig['managementApi']>)
     case 'managementApi:generateSecret':
       return managementApi.generateSecret()
+    case 'managementApi:changeSecret': {
+      const input = args[0] as { newSecret: string; confirmSecret: string }
+      return managementApi.changeSecret(input.newSecret, input.confirmSecret)
+    }
     case 'contextManagement:getConfig':
       return contextManagement.getConfig()
     case 'contextManagement:updateConfig':
@@ -1127,6 +1150,7 @@ window.electronAPI = {
   app,
   config,
   prompts,
+  skills,
   session,
   managementApi,
   contextManagement,

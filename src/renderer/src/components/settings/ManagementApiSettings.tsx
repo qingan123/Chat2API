@@ -35,6 +35,12 @@ export function ManagementApiSettings() {
   const [copied, setCopied] = useState(false)
   const [proxyPort, setProxyPort] = useState<number>(8181)
   const [showSecret, setShowSecret] = useState(false) // 默认隐藏
+  const [newSecret, setNewSecret] = useState('')
+  const [confirmSecret, setConfirmSecret] = useState('')
+  const [showNewSecret, setShowNewSecret] = useState(false)
+  const [isChangingSecret, setIsChangingSecret] = useState(false)
+  const [changeSecretError, setChangeSecretError] = useState('')
+  const [changeSecretSuccess, setChangeSecretSuccess] = useState(false)
 
   useEffect(() => {
     loadConfig()
@@ -85,15 +91,41 @@ export function ManagementApiSettings() {
   const handleGenerateNew = async () => {
     setIsGenerating(true)
     try {
-      const newSecret = await window.electronAPI.invoke('managementApi:generateSecret') as string
-      if (newSecret) {
-        setConfig(prev => ({ ...prev, managementApiSecret: newSecret }))
+      const generatedSecret = await window.electronAPI.invoke('managementApi:generateSecret') as string
+      if (generatedSecret) {
+        setConfig(prev => ({ ...prev, managementApiSecret: generatedSecret }))
       }
       setShowConfirmDialog(false)
     } catch (error) {
       console.error('Failed to generate new secret:', error)
     } finally {
       setIsGenerating(false)
+    }
+  }
+
+  const handleChangeSecret = async () => {
+    setChangeSecretError('')
+    setChangeSecretSuccess(false)
+    if (newSecret.length < 6) {
+      setChangeSecretError(t('settings.managementApi.passwordTooShort'))
+      return
+    }
+    if (newSecret !== confirmSecret) {
+      setChangeSecretError(t('settings.managementApi.passwordMismatch'))
+      return
+    }
+
+    setIsChangingSecret(true)
+    try {
+      await window.electronAPI.managementApi.changeSecret(newSecret, confirmSecret)
+      setConfig(prev => ({ ...prev, managementApiSecret: newSecret }))
+      setNewSecret('')
+      setConfirmSecret('')
+      setChangeSecretSuccess(true)
+    } catch (error) {
+      setChangeSecretError(error instanceof Error ? error.message : t('settings.managementApi.changePasswordError'))
+    } finally {
+      setIsChangingSecret(false)
     }
   }
 
@@ -198,6 +230,65 @@ export function ManagementApiSettings() {
                 <RefreshCw className={`h-4 w-4 mr-2 ${isGenerating ? 'animate-spin' : ''}`} />
                 {t('settings.managementApi.generateNew')}
               </Button>
+
+              <div className="space-y-4 rounded-lg border p-4">
+                <div>
+                  <h4 className="font-medium">{t('settings.managementApi.changePassword')}</h4>
+                  <p className="text-sm text-muted-foreground">
+                    {t('settings.managementApi.changePasswordDescription')}
+                  </p>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="new-management-secret">{t('settings.managementApi.newPassword')}</Label>
+                    <Input
+                      id="new-management-secret"
+                      type={showNewSecret ? 'text' : 'password'}
+                      value={newSecret}
+                      onChange={event => setNewSecret(event.target.value)}
+                      minLength={6}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="confirm-management-secret">{t('settings.managementApi.confirmPassword')}</Label>
+                    <Input
+                      id="confirm-management-secret"
+                      type={showNewSecret ? 'text' : 'password'}
+                      value={confirmSecret}
+                      onChange={event => setConfirmSecret(event.target.value)}
+                      minLength={6}
+                      autoComplete="new-password"
+                    />
+                  </div>
+                </div>
+                <label className="flex min-h-11 items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={showNewSecret}
+                    onChange={event => setShowNewSecret(event.target.checked)}
+                  />
+                  {t('settings.managementApi.showNewPassword')}
+                </label>
+                {changeSecretError && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{changeSecretError}</AlertDescription>
+                  </Alert>
+                )}
+                {changeSecretSuccess && (
+                  <Alert>
+                    <Check className="h-4 w-4" />
+                    <AlertDescription>{t('settings.managementApi.changePasswordSuccess')}</AlertDescription>
+                  </Alert>
+                )}
+                <Button
+                  onClick={handleChangeSecret}
+                  disabled={isChangingSecret || !newSecret || !confirmSecret}
+                  className="min-h-11"
+                >
+                  {isChangingSecret ? t('common.loading') : t('settings.managementApi.savePassword')}
+                </Button>
+              </div>
             </CardContent>
           </Card>
 

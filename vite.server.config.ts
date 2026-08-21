@@ -19,6 +19,10 @@ export default defineConfig({
       input: {
         'server/index': resolve(__dirname, 'src/server/index.ts'),
         'server/bootstrapConfig': resolve(__dirname, 'src/server/bootstrapConfig.ts'),
+        'server/managementSecretFile': resolve(__dirname, 'src/server/managementSecretFile.ts'),
+        'server/managementSecretService': resolve(__dirname, 'src/server/managementSecretService.ts'),
+        'main/data/builtin-prompt-extensions': resolve(__dirname, 'src/main/data/builtin-prompt-extensions.ts'),
+        'main/proxy/services/promptExtensionService': resolve(__dirname, 'src/main/proxy/services/promptExtensionService.ts'),
         'main/runtime/nodeRuntime': resolve(__dirname, 'src/main/runtime/nodeRuntime.ts'),
         'main/store/storage/nodeJsonStore': resolve(__dirname, 'src/main/store/storage/nodeJsonStore.ts'),
       },
