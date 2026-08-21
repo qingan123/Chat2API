@@ -50,7 +50,10 @@ port_is_listening() {
 install_packages() {
   export DEBIAN_FRONTEND=noninteractive
   apt-get update
-  apt-get install -y ca-certificates curl git openssl python3 docker.io
+  apt-get install -y ca-certificates curl git openssl python3
+  if ! command -v docker >/dev/null 2>&1; then
+    apt-get install -y docker.io
+  fi
   systemctl enable --now docker
   docker version >/dev/null 2>&1 || die "Docker 服务不可用。"
 }
