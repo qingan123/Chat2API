@@ -491,6 +491,29 @@ ${buildBrowserImportFallbackBlock()}
 })();`
 }
 
+function buildGenericBrowserImportScript(session: BrowserImportSession): string {
+  const completeUrl = `${window.location.origin}${MANAGEMENT_BASE}/browser-import/complete`
+  return `(() => {
+  const importId = ${JSON.stringify(session.id)};
+  const providerId = ${JSON.stringify(session.providerId)};
+  const completeUrl = ${JSON.stringify(completeUrl)};
+  const credentials = { cookie: document.cookie || '' };
+  try {
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (key) credentials[key] = localStorage.getItem(key) || '';
+    }
+  } catch (error) {}
+  const payload = {
+    importId,
+    providerId,
+    credentials,
+    error: Object.values(credentials).some(Boolean) ? '' : 'No readable Cookie or Local Storage credentials were found. Export Cookie JSON or request headers and paste them into Auto-detect Credentials.',
+  };
+${buildBrowserImportFallbackBlock()}
+})();`
+}
+
 function buildBrowserImportScript(session: BrowserImportSession): string {
   if (session.providerId === 'qwen-ai') {
     return buildQwenAiImportScript(session)
@@ -501,7 +524,7 @@ function buildBrowserImportScript(session: BrowserImportSession): string {
   if (session.providerId === 'kimi') {
     return buildKimiImportScript(session)
   }
-  throw new Error('Browser-assisted import is only available for Qwen and Kimi providers in Docker.')
+  return buildGenericBrowserImportScript(session)
 }
 
 const defaultUpdateStatus = {

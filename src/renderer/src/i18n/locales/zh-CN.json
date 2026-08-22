@@ -195,6 +195,7 @@
     "openOAuthLogin": "打开 OAuth 登录",
     "browserImportTitle": "Docker 浏览器辅助导入",
     "browserImportDesc": "先打开供应商网页并登录，再复制下方脚本到该网页控制台运行。HTTPS/本地管理页会自动回填；如果 HTTP 部署被浏览器拦截，请把控制台输出的 JSON 粘贴到下方导入结果框。",
+    "browserImportSteps": "使用方法：1. 点击“打开供应商网页”并登录；2. 回到这里点击“生成导入脚本”和“复制导入脚本”；3. 回到供应商网页打开开发者工具→Console，粘贴脚本并按 Enter；4. 回到这里等待自动回填。手机浏览器无法打开 Console 时，请使用“自动识别凭证”粘贴 Cookie/请求头/Local Storage JSON。脚本只读取当前网页可读取的凭证，不会读取密码。",
     "openProviderWebsite": "打开供应商网页",
     "generateImportScript": "生成导入脚本",
     "regenerateImportScript": "重新生成脚本",

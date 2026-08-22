@@ -32,7 +32,7 @@ const BROWSER_IMPORT_RESULT_LIMIT = 128
 const BROWSER_IMPORT_RATE_WINDOW_MS = 60 * 1000
 const BROWSER_IMPORT_RATE_LIMIT = 32
 
-type BrowserImportProviderId = 'qwen' | 'qwen-ai' | 'kimi'
+type BrowserImportProviderId = 'qwen' | 'qwen-ai' | 'kimi' | 'deepseek' | 'glm' | 'minimax' | 'mimo' | 'perplexity' | 'zai'
 
 type BrowserImportResult = {
   importId: string
@@ -167,6 +167,13 @@ function normalizeBrowserImportCredentials(
     }
   }
 
+  const stringCredentials = Object.fromEntries(
+    Object.entries(credentials).map(([key, value]) => [key, typeof value === 'string' ? value : String(value ?? '')]),
+  )
+  if (providerId !== 'qwen') {
+    return stringCredentials
+  }
+
   const ticket = String(credentials.ticket || credentials.tongyi_sso_ticket || '')
   return {
     ticket,
@@ -186,7 +193,7 @@ function setBrowserImportResult(input: {
     throw new Error('importId must be between 16 and 128 characters')
   }
 
-  if (input.providerId !== 'qwen' && input.providerId !== 'qwen-ai' && input.providerId !== 'kimi') {
+  if (!['qwen', 'qwen-ai', 'kimi', 'deepseek', 'glm', 'minimax', 'mimo', 'perplexity', 'zai'].includes(input.providerId)) {
     throw new Error('Unsupported browser import provider')
   }
 

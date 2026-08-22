@@ -195,6 +195,7 @@
     "openOAuthLogin": "Open OAuth Login",
     "browserImportTitle": "Docker Browser-Assisted Import",
     "browserImportDesc": "Open the provider website and sign in, then copy the script below into that page's console. HTTPS/local admin pages fill automatically; if an HTTP deployment is blocked, paste the JSON printed in the console into the import result box below.",
+    "browserImportSteps": "How to use: 1. Open the provider website and sign in; 2. Return here, generate and copy the import script; 3. Return to the provider page, open Developer Tools → Console, paste the script, and press Enter; 4. Return here and wait for the credentials. If mobile Safari/Chrome cannot open Console, use Auto-detect Credentials with Cookie, request headers, or Local Storage JSON. The script reads only browser-readable credentials and never reads your password.",
     "openProviderWebsite": "Open Provider Website",
     "generateImportScript": "Generate Import Script",
     "regenerateImportScript": "Regenerate Script",

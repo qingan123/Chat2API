@@ -280,6 +280,10 @@ test('mobile Docker OAuth flow covers every built-in provider', () => {
   for (const providerId of ['deepseek', 'glm', 'minimax', 'mimo', 'perplexity', 'zai']) {
     assert.match(account + provider + webApi, new RegExp(providerId))
   }
+  assert.match(webApi, /buildGenericBrowserImportScript/)
+  assert.match(webApi, /buildBrowserImportScript[\s\S]*buildGenericBrowserImportScript/)
+  assert.match(route, /BrowserImportProviderId = 'qwen' \| 'qwen-ai' \| 'kimi' \| 'deepseek'/)
+  assert.match(account + provider, /browserImportSteps/)
 })
 
 test('provider dialogs fit a 390px mobile viewport without horizontal overflow', () => {

@@ -145,7 +145,7 @@ export function AddAccountDialog({
   const isDockerWebAdmin = !!window.__CHAT2API_WEB_ADMIN__
   const supportsInteractiveOAuth = Boolean(supportsOAuth && !isDockerWebAdmin)
   const supportsBrowserCredentialImport = Boolean(isDockerWebAdmin && provider)
-  const supportsBrowserImportScript = Boolean(isDockerWebAdmin && provider && ['qwen', 'qwen-ai', 'kimi'].includes(provider.id))
+  const supportsBrowserImportScript = Boolean(isDockerWebAdmin && provider)
   const supportsAuthFlow = supportsInteractiveOAuth || supportsBrowserCredentialImport
   const canImportCredentials = supportsCredentialImport(provider?.id)
 
@@ -527,6 +527,7 @@ export function AddAccountDialog({
                       <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
                         <p className="font-medium text-foreground">{t('providers.browserImportTitle')}</p>
                         <p className="mt-1">{t('providers.browserImportDesc')}</p>
+                        <p className="mt-2 whitespace-pre-line text-xs">{t('providers.browserImportSteps')}</p>
                       </div>
                       {canImportCredentials && provider && (
                         <CredentialImportPanel providerId={provider.id} onApply={parsed => { setCredentials(prev => ({ ...prev, ...parsed })); setValidationResult({}) }} t={t} />

@@ -182,7 +182,7 @@ export function AddProviderDialog({
   const isDockerWebAdmin = !!window.__CHAT2API_WEB_ADMIN__
   const supportsInteractiveOAuth = Boolean(supportsOAuth && !isDockerWebAdmin)
   const supportsBrowserCredentialImport = Boolean(isDockerWebAdmin && selectedProviderData)
-  const supportsBrowserImportScript = Boolean(isDockerWebAdmin && selectedProviderData && ['qwen', 'qwen-ai', 'kimi'].includes(selectedProviderData.id))
+  const supportsBrowserImportScript = Boolean(isDockerWebAdmin && selectedProviderData)
   const supportsAuthFlow = supportsInteractiveOAuth || supportsBrowserCredentialImport
   const canImportCredentials = supportsCredentialImport(selectedProviderData?.id)
   const oauthRefreshCredentialFields = selectedProviderData?.id === 'qwen-ai'
@@ -902,6 +902,7 @@ export function AddProviderDialog({
                   <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
                     <p className="font-medium text-foreground">{t('providers.browserImportTitle')}</p>
                     <p className="mt-1">{t('providers.browserImportDesc')}</p>
+                    <p className="mt-2 whitespace-pre-line text-xs">{t('providers.browserImportSteps')}</p>
                   </div>
                   {canImportCredentials && selectedProviderData && (
                     <CredentialImportPanel providerId={selectedProviderData.id} onApply={parsed => { setCredentials(prev => ({ ...prev, ...parsed })); setValidationResult({}) }} t={t} />
