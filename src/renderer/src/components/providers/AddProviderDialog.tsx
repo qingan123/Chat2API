@@ -188,6 +188,7 @@ export function AddProviderDialog({
   const oauthRefreshCredentialFields = selectedProviderData?.id === 'qwen-ai'
     ? selectedProviderData.credentialFields.filter(field => ['email', 'password'].includes(field.name))
     : []
+  const supportsPasswordLogin = selectedProviderData?.id === 'qwen-ai'
 
   const toggleModelExpansion = (providerId: string) => {
     setExpandedModels(prev => {
@@ -263,6 +264,24 @@ export function AddProviderDialog({
       })
     } finally {
       setIsValidating(false)
+    }
+  }
+
+  const handlePasswordLogin = async () => {
+    if (!selectedProviderData || !supportsPasswordLogin) return
+    setIsOAuthLoading(true)
+    setOAuthStatus(t('providers.passwordLoginInProgress'))
+    try {
+      const result = await window.electronAPI.oauth.refreshToken(selectedProviderData.id, selectedProviderData.id as ProviderVendor, credentials)
+      if (!result?.value) throw new Error(t('providers.passwordLoginFailed'))
+      setCredentials(prev => ({ ...prev, ...(result.extra || {}), token: result.value }))
+      setValidationResult({ valid: true })
+      setOAuthStatus(t('providers.passwordLoginSuccess'))
+    } catch (error) {
+      setValidationResult({ valid: false, error: error instanceof Error ? error.message : t('providers.passwordLoginFailed') })
+      setOAuthStatus(t('providers.passwordLoginFailed'))
+    } finally {
+      setIsOAuthLoading(false)
     }
   }
 
@@ -910,6 +929,11 @@ export function AddProviderDialog({
                   {oauthRefreshCredentialFields.length > 0 && (
                     <div className="rounded-lg border p-3">
                       {renderCredentialFields(oauthRefreshCredentialFields)}
+                      {supportsPasswordLogin && (
+                        <Button type="button" className="mt-3 w-full" onClick={handlePasswordLogin} disabled={isOAuthLoading || !credentials.email || !credentials.password}>
+                          {t('providers.passwordLogin')}
+                        </Button>
+                      )}
                     </div>
                   )}
                   <div className="flex flex-wrap gap-2">

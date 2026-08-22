@@ -141,6 +141,7 @@ export function AddAccountDialog({
   const oauthRefreshCredentialFields = provider?.id === 'qwen-ai'
     ? credentialFields.filter(field => ['email', 'password'].includes(field.name))
     : []
+  const supportsPasswordLogin = provider?.id === 'qwen-ai'
   const supportsOAuth = provider && ['deepseek', 'glm', 'kimi', 'mimo', 'minimax', 'qwen', 'qwen-ai', 'zai', 'perplexity'].includes(provider.id)
   const isDockerWebAdmin = !!window.__CHAT2API_WEB_ADMIN__
   const supportsInteractiveOAuth = Boolean(supportsOAuth && !isDockerWebAdmin)
@@ -224,6 +225,24 @@ export function AddAccountDialog({
       })
     } finally {
       setIsValidating(false)
+    }
+  }
+
+  const handlePasswordLogin = async () => {
+    if (!provider || !supportsPasswordLogin) return
+    setIsOAuthLoading(true)
+    setOAuthStatus(t('providers.passwordLoginInProgress'))
+    try {
+      const result = await window.electronAPI.oauth.refreshToken(provider.id, provider.id as ProviderVendor, credentials)
+      if (!result?.value) throw new Error(t('providers.passwordLoginFailed'))
+      setCredentials(prev => ({ ...prev, ...(result.extra || {}), token: result.value }))
+      setValidationResult({ valid: true })
+      setOAuthStatus(t('providers.passwordLoginSuccess'))
+    } catch (error) {
+      setValidationResult({ valid: false, error: error instanceof Error ? error.message : t('providers.passwordLoginFailed') })
+      setOAuthStatus(t('providers.passwordLoginFailed'))
+    } finally {
+      setIsOAuthLoading(false)
     }
   }
 
@@ -541,6 +560,11 @@ export function AddAccountDialog({
                             t={t}
                             providerId={provider?.id}
                           />
+                          {supportsPasswordLogin && (
+                            <Button type="button" className="mt-3 w-full" onClick={handlePasswordLogin} disabled={isOAuthLoading || !credentials.email || !credentials.password}>
+                              {t('providers.passwordLogin')}
+                            </Button>
+                          )}
                         </div>
                       )}
                       <div className="flex flex-wrap gap-2">

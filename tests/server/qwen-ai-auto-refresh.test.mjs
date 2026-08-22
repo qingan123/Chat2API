@@ -80,6 +80,23 @@ test('Qwen AI OAuth import form keeps optional refresh login fields', () => {
   assert.match(addAccountSource, /setCredentials\(prev => \(\{\s*\.\.\.prev,\s*\.\.\.mappedCredentials,\s*\}\)\)/s)
 })
 
+
+test('Qwen AI password login uses encrypted account credentials and account deletion removes the whole record', () => {
+  const adapterSource = fs.readFileSync('src/main/oauth/adapters/qwen-ai.ts', 'utf8')
+  const addAccountSource = fs.readFileSync('src/renderer/src/components/providers/AddAccountDialog.tsx', 'utf8')
+  const addProviderSource = fs.readFileSync('src/renderer/src/components/providers/AddProviderDialog.tsx', 'utf8')
+  const storeSource = fs.readFileSync('src/main/store/store.ts', 'utf8')
+  const providersPageSource = fs.readFileSync('src/renderer/src/pages/Providers.tsx', 'utf8')
+
+  assert.match(adapterSource, /QwenAiTokenRefresher/)
+  assert.match(adapterSource, /repairWebSession/)
+  assert.match(addAccountSource, /oauth\.refreshToken\(provider\.id, provider\.id as ProviderVendor, credentials\)/)
+  assert.match(addProviderSource, /oauth\.refreshToken\(selectedProviderData\.id, selectedProviderData\.id as ProviderVendor, credentials\)/)
+  assert.match(storeSource, /credentials:\s*this\.encryptCredentials\(account\.credentials\)/)
+  assert.match(storeSource, /deleteAccount\(id: string\)[\s\S]*accounts\.splice\(index, 1\)/)
+  assert.match(providersPageSource, /accounts\.delete\(id\)/)
+})
+
 test('Qwen AI adapter refreshes expiring web tokens by signing in with saved email and password', () => {
   const refresherSource = fs.readFileSync('src/main/proxy/adapters/qwen-ai-token-refresh.ts', 'utf8')
   const adapterSource = fs.readFileSync('src/main/proxy/adapters/qwen-ai.ts', 'utf8')

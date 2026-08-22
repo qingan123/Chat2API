@@ -13,6 +13,7 @@ import {
   AdapterConfig,
   OAuthCallbackData,
 } from '../types'
+import { QwenAiTokenRefresher } from '../../proxy/adapters/qwen-ai-token-refresh'
 
 const QWEN_AI_API_BASE = 'https://chat.qwen.ai'
 
@@ -179,7 +180,22 @@ export class QwenAiAdapter extends BaseOAuthAdapter {
   }
 
   async refreshToken(credentials: Record<string, string>): Promise<CredentialInfo | null> {
-    return null
+    if (!credentials.email || !credentials.password) return null
+    const refreshed = await new QwenAiTokenRefresher().repairWebSession({
+      id: 'qwen-ai-password-login',
+      providerId: 'qwen-ai',
+      name: credentials.email,
+      email: credentials.email,
+      credentials,
+      status: 'active',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    })
+    return {
+      type: 'access',
+      value: refreshed.credentials.token || '',
+      extra: refreshed.credentials,
+    }
   }
 }
 
