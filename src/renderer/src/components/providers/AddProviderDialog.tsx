@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Check, Plus, ArrowRight, Loader2, ExternalLink, AlertCircle, CheckCircle2, ArrowLeft, Info, Eye, EyeOff, Copy } from 'lucide-react'
 import type { BuiltinProviderConfig, ProviderVendor } from '@/types/electron'
 import { CredentialImportPanel } from './CredentialImportPanel'
+import { normalizeProviderCredentials, supportsCredentialImport } from '@shared/credentialImport'
 import { cn } from '@/lib/utils'
 import deepseekIcon from '@/assets/providers/deepseek.svg'
 import glmIcon from '@/assets/providers/glm.svg'
@@ -56,134 +57,6 @@ const providerIcons: Record<string, string> = {
   qwen: qwenIcon,
   'qwen-ai': qwenIcon,
   zai: zaiIcon,
-}
-
-function mapOAuthCredentials(providerId: string | undefined, credentials: Record<string, string>): Record<string, string> {
-  console.log('[mapOAuthCredentials] Input providerId:', providerId, 'credential keys:', Object.keys(credentials))
-  
-  if (!providerId) {
-    console.log('[mapOAuthCredentials] No providerId, returning as-is')
-    return credentials
-  }
-
-  const credentialKeyMap: Record<string, string> = {
-    'glm': 'chatglm_refresh_token',
-    'deepseek': 'userToken',
-    'qwen': 'tongyi_sso_ticket',
-    'zai': 'tongyi_sso_ticket',
-    'perplexity': '__Secure-next-auth.session-token',
-  }
-
-  const providerFieldNames: Record<string, string> = {
-    'glm': 'refresh_token',
-    'deepseek': 'token',
-    'qwen': 'ticket',
-    'zai': 'ticket',
-    'perplexity': 'sessionToken',
-  }
-
-  if (providerId === 'qwen-ai') {
-    return {
-      token: credentials.token || '',
-      ...(credentials.cookies ? { cookies: credentials.cookies } : {}),
-      ...(credentials.baxiaUidToken ? { baxiaUidToken: credentials.baxiaUidToken } : {}),
-      ...(credentials.baxiaUa ? { baxiaUa: credentials.baxiaUa } : {}),
-      ...(credentials.baxiaVersion ? { baxiaVersion: credentials.baxiaVersion } : {}),
-      ...(credentials.x5secdata ? { x5secdata: credentials.x5secdata } : {}),
-      ...(credentials.x5sectag ? { x5sectag: credentials.x5sectag } : {}),
-    }
-  }
-
-  if (providerId === 'kimi') {
-    const refreshToken = credentials.refreshToken || credentials.refresh_token || ''
-    const token = credentials.accessToken
-      || credentials.access_token
-      || credentials.token
-      || credentials.kimiAuth
-      || credentials['kimi-auth']
-      || refreshToken
-      || ''
-    const trafficId = credentials.trafficId
-      || credentials.traffic_id
-      || credentials.userId
-      || credentials.user_id
-      || credentials.mshUserId
-      || credentials.msh_user_id
-      || ''
-    const deviceId = credentials.deviceId || credentials.device_id || credentials.webId || credentials.web_id || ''
-    const sessionId = credentials.sessionId || credentials.session_id || credentials.ssid || ''
-    return {
-      token,
-      ...(refreshToken ? { refreshToken } : {}),
-      ...(deviceId ? { deviceId } : {}),
-      ...(sessionId ? { sessionId } : {}),
-      ...(trafficId ? { trafficId } : {}),
-    }
-  }
-
-  const oauthKey = credentialKeyMap[providerId]
-  if (oauthKey && credentials[oauthKey]) {
-    const fieldName = providerFieldNames[providerId]
-    if (fieldName) {
-      let tokenValue = credentials[oauthKey]
-      if (providerId === 'deepseek' && tokenValue && tokenValue.startsWith('{') && tokenValue.endsWith('}')) {
-        try {
-          const parsed = JSON.parse(tokenValue)
-          if (parsed.value) {
-            tokenValue = parsed.value
-          }
-        } catch (e) {
-          console.error('[mapOAuthCredentials] Error parsing JSON token:', e)
-        }
-      }
-      console.log('[mapOAuthCredentials] Mapped', oauthKey, 'to', fieldName)
-      return { [fieldName]: tokenValue }
-    }
-  }
-
-  if (providerId === 'perplexity' && credentials['__Secure-next-auth.session-token']) {
-    console.log('[mapOAuthCredentials] Mapped Perplexity secure token')
-    return { sessionToken: credentials['__Secure-next-auth.session-token'] }
-  }
-  if (providerId === 'perplexity' && credentials['next-auth.session-token']) {
-    console.log('[mapOAuthCredentials] Mapped Perplexity session token')
-    return { sessionToken: credentials['next-auth.session-token'] }
-  }
-
-  if (providerId === 'mimo') {
-    console.log('[mapOAuthCredentials] Processing Mimo credentials')
-    const result: Record<string, string> = {}
-    
-    if (credentials['serviceToken']) {
-      result['service_token'] = credentials['serviceToken']
-      console.log('[mapOAuthCredentials] Mapped serviceToken -> service_token')
-    } else if (credentials['service_token']) {
-      result['service_token'] = credentials['service_token']
-      console.log('[mapOAuthCredentials] Using existing service_token')
-    }
-    
-    if (credentials['userId']) {
-      result['user_id'] = credentials['userId']
-      console.log('[mapOAuthCredentials] Mapped userId -> user_id')
-    } else if (credentials['user_id']) {
-      result['user_id'] = credentials['user_id']
-      console.log('[mapOAuthCredentials] Using existing user_id')
-    }
-    
-    if (credentials['xiaomichatbot_ph']) {
-      result['ph_token'] = credentials['xiaomichatbot_ph']
-      console.log('[mapOAuthCredentials] Mapped xiaomichatbot_ph -> ph_token')
-    } else if (credentials['ph_token']) {
-      result['ph_token'] = credentials['ph_token']
-      console.log('[mapOAuthCredentials] Using existing ph_token')
-    }
-    
-    console.log('[mapOAuthCredentials] Mimo result keys:', Object.keys(result))
-    return result
-  }
-
-  console.log('[mapOAuthCredentials] No special mapping needed, returning as-is')
-  return credentials
 }
 
 function selectVisibleTextArea(textarea: HTMLTextAreaElement | null): boolean {
@@ -307,8 +180,10 @@ export function AddProviderDialog({
 
   const supportsOAuth = selectedProviderData && ['deepseek', 'glm', 'kimi', 'mimo', 'minimax', 'qwen', 'qwen-ai', 'zai', 'perplexity'].includes(selectedProviderData.id)
   const isDockerWebAdmin = !!window.__CHAT2API_WEB_ADMIN__
-  const supportsBrowserImport = isDockerWebAdmin && selectedProviderData && ['qwen', 'qwen-ai', 'kimi'].includes(selectedProviderData.id)
-  const supportsCredentialImport = selectedProviderData && ['deepseek', 'glm', 'kimi', 'mimo', 'minimax', 'qwen', 'qwen-ai', 'zai', 'perplexity'].includes(selectedProviderData.id)
+  const supportsInteractiveOAuth = Boolean(supportsOAuth && !isDockerWebAdmin)
+  const supportsBrowserCredentialImport = Boolean(isDockerWebAdmin && selectedProviderData && ['qwen', 'qwen-ai', 'kimi'].includes(selectedProviderData.id))
+  const supportsAuthFlow = supportsInteractiveOAuth || supportsBrowserCredentialImport
+  const canImportCredentials = supportsCredentialImport(selectedProviderData?.id)
   const oauthRefreshCredentialFields = selectedProviderData?.id === 'qwen-ai'
     ? selectedProviderData.credentialFields.filter(field => ['email', 'password'].includes(field.name))
     : []
@@ -432,39 +307,22 @@ export function AddProviderDialog({
     setOAuthStatus(t('providers.openingLoginWindow'))
     
     try {
-      console.log('[AddProviderDialog] Starting OAuth login for:', selectedProviderData.id)
-      
       const result = await window.electronAPI?.oauth.startInAppLogin(
         selectedProviderData.id,
         selectedProviderData.id as ProviderVendor
       )
       
-      console.log('[AddProviderDialog] OAuth result:', {
-        success: result?.success,
-        credentialKeys: result?.credentials ? Object.keys(result.credentials) : [],
-        error: result?.error,
-      })
-      
       if (result?.success && result.credentials) {
-        console.log('[AddProviderDialog] OAuth success, credential keys:', Object.keys(result.credentials))
-        
-        const mappedCredentials = mapOAuthCredentials(selectedProviderData?.id, result.credentials)
-        console.log('[AddProviderDialog] Mapped credential keys:', Object.keys(mappedCredentials))
-        
+        const mappedCredentials = normalizeProviderCredentials(selectedProviderData?.id, result.credentials)
         const hasAllRequiredFields = selectedProviderData.credentialFields
           .filter(f => f.required)
           .every(f => mappedCredentials[f.name])
-        
-        console.log('[AddProviderDialog] Has all required fields:', hasAllRequiredFields)
-        console.log('[AddProviderDialog] Required fields:', selectedProviderData.credentialFields.filter(f => f.required).map(f => f.name))
-        console.log('[AddProviderDialog] Mapped credentials keys:', Object.keys(mappedCredentials))
-        
+
         if (!hasAllRequiredFields) {
-          console.error('[AddProviderDialog] Missing required fields!')
           const missing = selectedProviderData.credentialFields
             .filter(f => f.required && !mappedCredentials[f.name])
             .map(f => f.name)
-          console.error('[AddProviderDialog] Missing:', missing)
+          setOAuthStatus(t('providers.fillRequiredFields', { fields: missing.join(', ') }))
         }
         
         setCredentials(mappedCredentials)
@@ -476,7 +334,6 @@ export function AddProviderDialog({
         })
       } else {
         const errorMsg = result?.error || ''
-        console.error('[AddProviderDialog] OAuth failed:', errorMsg)
         const translatedError = errorMsg === 'Login window was closed' 
           ? t('providers.loginWindowClosed')
           : errorMsg === 'A login window is already open'
@@ -488,7 +345,6 @@ export function AddProviderDialog({
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : t('providers.loginFailed')
-      console.error('[AddProviderDialog] OAuth error:', errorMessage)
       setOAuthStatus(errorMessage)
     } finally {
       setIsOAuthLoading(false)
@@ -542,7 +398,7 @@ export function AddProviderDialog({
     error?: string
   }): boolean => {
     if (session.status === 'success' && session.credentials) {
-      const mappedCredentials = mapOAuthCredentials(selectedProviderData?.id, session.credentials)
+      const mappedCredentials = normalizeProviderCredentials(selectedProviderData?.id, session.credentials)
       setCredentials(prev => ({
         ...prev,
         ...mappedCredentials,
@@ -1014,22 +870,27 @@ export function AddProviderDialog({
       <div className="border-t pt-4">
         <h4 className="text-sm font-medium mb-3">{t('providers.credentials')}</h4>
         
-        {supportsOAuth ? (
+        {supportsAuthFlow ? (
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="manual">{t('providers.manualInput')}</TabsTrigger>
               <TabsTrigger value="oauth">{t('providers.oauthLogin')}</TabsTrigger>
             </TabsList>
 
-            <TabsContent value="manual" className="mt-4">
-              {supportsCredentialImport && selectedProviderData && (
+            <TabsContent value="manual" className="mt-4 space-y-4">
+              {isDockerWebAdmin && supportsOAuth && (
+                <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                  {t('providers.dockerOAuthUnavailable')}
+                </div>
+              )}
+              {canImportCredentials && selectedProviderData && (
                 <CredentialImportPanel providerId={selectedProviderData.id} onApply={parsed => { setCredentials(prev => ({ ...prev, ...parsed })); setValidationResult({}) }} t={t} />
               )}
               {renderCredentialFields()}
             </TabsContent>
 
             <TabsContent value="oauth" className="mt-4">
-              {supportsBrowserImport ? (
+              {supportsBrowserCredentialImport ? (
                 <div className="space-y-4">
                   <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
                     <p className="font-medium text-foreground">{t('providers.browserImportTitle')}</p>
@@ -1154,7 +1015,17 @@ export function AddProviderDialog({
             </TabsContent>
           </Tabs>
         ) : (
-          renderCredentialFields()
+          <div className="space-y-4">
+            {isDockerWebAdmin && supportsOAuth && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                {t('providers.dockerOAuthUnavailable')}
+              </div>
+            )}
+            {canImportCredentials && selectedProviderData && (
+              <CredentialImportPanel providerId={selectedProviderData.id} onApply={parsed => { setCredentials(prev => ({ ...prev, ...parsed })); setValidationResult({}) }} t={t} />
+            )}
+            {renderCredentialFields()}
+          </div>
         )}
 
         {validationResult.error && (
@@ -1183,7 +1054,7 @@ export function AddProviderDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[640px]">
+      <DialogContent className="max-h-[90vh] overflow-y-auto p-4 sm:max-w-[640px] sm:p-6">
         <DialogHeader>
           <DialogTitle>
             {step === 1 ? t('providers.addProvider') : t('providers.addAccount')}

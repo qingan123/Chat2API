@@ -33,3 +33,29 @@ test('credential parser returns no fields for unrelated text', async () => {
   const { parseCredentialText } = await parser()
   assert.deepEqual(parseCredentialText('glm', 'Cookie: unrelated=value').credentials, {})
 })
+
+test('credential parser covers every built-in browser credential provider', async () => {
+  const { parseCredentialText } = await parser()
+  const cases = [
+    ['deepseek', 'Authorization: Bearer deepseek-token', { token: 'deepseek-token' }],
+    ['glm', 'Cookie: chatglm_refresh_token=glm-refresh', { refresh_token: 'glm-refresh' }],
+    ['kimi', JSON.stringify({ access_token: 'kimi-access', refresh_token: 'kimi-refresh' }), { token: 'kimi-access', refreshToken: 'kimi-refresh' }],
+    ['mimo', JSON.stringify([{ name: 'serviceToken', value: 'service' }, { name: 'userId', value: 'user' }, { name: 'xiaomichatbot_ph', value: 'ph' }]), { service_token: 'service', user_id: 'user', ph_token: 'ph' }],
+    ['perplexity', 'Cookie: __Secure-next-auth.session-token=session', { sessionToken: 'session' }],
+    ['qwen', 'Cookie: tongyi_sso_ticket=ticket', { ticket: 'ticket' }],
+    ['qwen-ai', JSON.stringify({ token: 'qwen-ai-token', cookies: 'a=b' }), { token: 'qwen-ai-token', cookies: 'a=b' }],
+    ['minimax', 'Authorization: Bearer minimax-token\nuser_id=user-1', { token: 'minimax-token', realUserID: 'user-1' }],
+    ['zai', 'Authorization: Bearer zai-ticket', { ticket: 'zai-ticket' }],
+  ]
+
+  for (const [providerId, input, expected] of cases) {
+    assert.deepEqual(parseCredentialText(providerId, input).credentials, expected, providerId)
+  }
+})
+
+test('credential parser reports field names only and never echoes unrelated secrets', async () => {
+  const { parseCredentialText } = await parser()
+  const result = parseCredentialText('deepseek', 'Authorization: Bearer deepseek-token\nCookie: password=must-not-return')
+  assert.deepEqual(result.recognizedFields, ['token'])
+  assert.equal(JSON.stringify(result).includes('must-not-return'), false)
+})

@@ -347,7 +347,7 @@ function buildBrowserImportFallbackBlock(): string {
   const announcePayload = async () => {
     if (payloadAnnounced) return;
     payloadAnnounced = true;
-    console.log('Chat2API browser import payload:', payloadText);
+    console.log('Chat2API browser import payload prepared.');
     const copied = await copyPayload();
     console.warn(copied
       ? 'Payload copied. Paste it into the Chat2API admin page if needed.'

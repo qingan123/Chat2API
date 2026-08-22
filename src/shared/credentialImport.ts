@@ -3,6 +3,102 @@ export type CredentialImportResult = {
   recognizedFields: string[]
 }
 
+export const CREDENTIAL_IMPORT_PROVIDER_IDS = [
+  'deepseek',
+  'glm',
+  'kimi',
+  'mimo',
+  'minimax',
+  'perplexity',
+  'qwen',
+  'qwen-ai',
+  'zai',
+] as const
+
+export function supportsCredentialImport(providerId: string | undefined): boolean {
+  return Boolean(providerId && CREDENTIAL_IMPORT_PROVIDER_IDS.includes(providerId as typeof CREDENTIAL_IMPORT_PROVIDER_IDS[number]))
+}
+
+export function normalizeProviderCredentials(
+  providerId: string | undefined,
+  credentials: Record<string, string>,
+): Record<string, string> {
+  if (!providerId) return credentials
+
+  if (providerId === 'qwen-ai') {
+    return {
+      token: credentials.token || credentials.access_token || credentials.accessToken || '',
+      ...(credentials.cookies ? { cookies: credentials.cookies } : {}),
+      ...(credentials.email ? { email: credentials.email } : {}),
+      ...(credentials.password ? { password: credentials.password } : {}),
+      ...(credentials.baxiaUidToken ? { baxiaUidToken: credentials.baxiaUidToken } : {}),
+      ...(credentials.baxiaUa ? { baxiaUa: credentials.baxiaUa } : {}),
+      ...(credentials.baxiaVersion ? { baxiaVersion: credentials.baxiaVersion } : {}),
+      ...(credentials.x5secdata ? { x5secdata: credentials.x5secdata } : {}),
+      ...(credentials.x5sectag ? { x5sectag: credentials.x5sectag } : {}),
+    }
+  }
+
+  if (providerId === 'kimi') {
+    const refreshToken = credentials.refreshToken || credentials.refresh_token || ''
+    const token = credentials.accessToken
+      || credentials.access_token
+      || credentials.token
+      || credentials.kimiAuth
+      || credentials['kimi-auth']
+      || refreshToken
+      || ''
+    const deviceId = credentials.deviceId || credentials.device_id || credentials.webId || credentials.web_id || ''
+    const sessionId = credentials.sessionId || credentials.session_id || credentials.ssid || ''
+    const trafficId = credentials.trafficId
+      || credentials.traffic_id
+      || credentials.mshUserId
+      || credentials.msh_user_id
+      || credentials.userId
+      || credentials.user_id
+      || ''
+    return {
+      token,
+      ...(refreshToken ? { refreshToken } : {}),
+      ...(deviceId ? { deviceId } : {}),
+      ...(sessionId ? { sessionId } : {}),
+      ...(trafficId ? { trafficId } : {}),
+    }
+  }
+
+  const aliases: Record<string, [string, string[]][]> = {
+    glm: [['refresh_token', ['refresh_token', 'refreshToken', 'chatglm_refresh_token']]],
+    deepseek: [['token', ['token', 'userToken', 'authorization']]],
+    qwen: [['ticket', ['ticket', 'tongyi_sso_ticket']]],
+    zai: [['ticket', ['ticket', 'tongyi_sso_ticket', 'token', 'authorization']]],
+    perplexity: [['sessionToken', ['sessionToken', '__Secure-next-auth.session-token', 'next-auth.session-token']]],
+    mimo: [
+      ['service_token', ['service_token', 'serviceToken']],
+      ['user_id', ['user_id', 'userId']],
+      ['ph_token', ['ph_token', 'xiaomichatbot_ph']],
+    ],
+    minimax: [
+      ['token', ['token', 'access_token', 'authorization']],
+      ['realUserID', ['realUserID', 'real_user_id', 'user_id']],
+    ],
+  }
+
+  const result: Record<string, string> = {}
+  for (const [target, sources] of aliases[providerId] || []) {
+    const value = sources.map(source => credentials[source]).find(Boolean)
+    if (!value) continue
+    let normalized = value.replace(/^Bearer\s+/i, '')
+    if (providerId === 'deepseek' && normalized.startsWith('{') && normalized.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(normalized)
+        if (typeof parsed.value === 'string') normalized = parsed.value
+      } catch { /* keep the copied token */ }
+    }
+    result[target] = normalized
+  }
+  return Object.keys(result).length > 0 ? result : credentials
+}
+
 function flatten(value: unknown, output: Record<string, string>): void {
   if (Array.isArray(value)) {
     for (const item of value) {
@@ -73,7 +169,11 @@ export function parseCredentialText(providerId: string, input: string): Credenti
   } else if (providerId === 'qwen-ai') {
     const token = first(values, 'token', 'access_token', 'accessToken', 'authorization')
     if (token) credentials.token = token.replace(/^Bearer\s+/i, '')
-    if (/=/.test(trimmed)) credentials.cookies = trimmed.replace(/^cookie\s*:/i, '').trim()
+    const cookies = first(values, 'cookies', 'cookie')
+    if (cookies) credentials.cookies = cookies
+    else if (!trimmed.startsWith('{') && !trimmed.startsWith('[') && /=/.test(trimmed)) {
+      credentials.cookies = trimmed.replace(/^cookie\s*:/i, '').trim()
+    }
   } else if (providerId === 'mimo') {
     const serviceToken = first(values, 'service_token', 'serviceToken')
     const userId = first(values, 'user_id', 'userId')
