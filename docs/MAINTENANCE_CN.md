@@ -31,6 +31,8 @@
 
 生产服务器只能部署或更新 `origin/main`。不要让生产更新脚本直接覆盖为 `official/main`，否则会丢失 WebUI、服务器运行模式、Py 增强和本仓库脚本。
 
+本仓库另外维护三项定制能力：Management Secret 文件持久化与后台改密码、系统提示词统一注入、BaiduChat 的 7 个 DeepSeek 技能及来源信息。所有迁入内容默认关闭。同步上游时必须保留 `src/main/data/builtin-prompt-extensions.ts`、`src/main/data/prompt-seeds/`、`src/main/data/skill-seeds/`、`src/main/proxy/services/promptExtensionService.ts` 和“技能与提示词”页面。
+
 ## 2. 首次配置远程
 
 ```bash

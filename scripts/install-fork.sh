@@ -73,6 +73,7 @@ CHAT2API_PORT=8080
 CHAT2API_DATA_DIR=/data
 CHAT2API_ENABLE_MANAGEMENT_API=true
 CHAT2API_MANAGEMENT_SECRET=$MANAGEMENT_SECRET
+CHAT2API_MANAGEMENT_SECRET_FILE=/data/management-secret.txt
 CHAT2API_ENABLE_API_KEY=true
 CHAT2API_STORAGE_ENCRYPTION_KEY=$STORAGE_KEY
 EOF
@@ -192,7 +193,7 @@ main() {
   DATA_DIR="$APP_DIR/data"
   ENV_FILE="$APP_DIR/runtime.env"
   KEY_FILE="$APP_DIR/api-key.txt"
-  SECRET_FILE="$APP_DIR/management-secret.txt"
+  SECRET_FILE="$DATA_DIR/management-secret.txt"
   META_FILE="$APP_DIR/.chat2api-deploy"
   CONTAINER_NAME="chat2api-$PORT"
   port_is_listening "$PORT" && die "端口 $PORT 已被占用。"

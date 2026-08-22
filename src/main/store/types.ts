@@ -613,12 +613,21 @@ export interface SystemPrompt {
   prompt: string
   /** Prompt type */
   type: PromptType
-  /** Whether built-in (built-in prompts cannot be edited/deleted) */
+  /** Whether built-in */
   isBuiltin: boolean
   /** Emoji icon */
   emoji?: string
   /** Group tags */
   groups?: string[]
+  /** Whether request injection is enabled */
+  enabled?: boolean
+  /** Model name glob, for example deepseek-* */
+  modelPattern?: string
+  /** Inject only on the first turn or on every request */
+  mode?: 'first' | 'every'
+  sourceUrl?: string
+  sourceCommit?: string
+  sourceFile?: string
   /** Creation time */
   createdAt: number
   /** Update time */
@@ -715,6 +724,8 @@ export interface StoreSchema {
   requestLogs: RequestLogEntry[]
   /** System prompts */
   systemPrompts: SystemPrompt[]
+  /** Prompt-based skill extensions */
+  skills: import('../../shared/types').SkillExtension[]
   /** Session records */
   sessions: SessionRecord[]
   /** Persistent statistics */

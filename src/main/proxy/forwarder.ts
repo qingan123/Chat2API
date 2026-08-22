@@ -62,6 +62,7 @@ import {
   SummaryGenerator,
   type ChatMessage as ContextChatMessage,
 } from './services/contextManagementService'
+import { applyPromptExtensions } from './services/promptExtensionService'
 import {
   classifyChatRequest,
   type ChatRequestIntent,
@@ -1210,6 +1211,11 @@ export class RequestForwarder {
       ...request,
       messages: sanitizedHistory.messages,
     }
+    request = applyPromptExtensions(request, {
+      model: request.originalModel || request.model || actualModel,
+      prompts: storeManager.getSystemPrompts(),
+      skills: storeManager.getSkills(),
+    })
     const config = storeManager.getConfig()
     const requestIntentInfo = classifyChatRequest(request)
     const requestIntent = context.requestIntent

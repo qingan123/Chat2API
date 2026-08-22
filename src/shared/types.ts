@@ -303,6 +303,28 @@ export interface SystemPrompt {
   isBuiltin: boolean
   emoji?: string
   groups?: string[]
+  enabled?: boolean
+  modelPattern?: string
+  mode?: 'first' | 'every'
+  sourceUrl?: string
+  sourceCommit?: string
+  sourceFile?: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface SkillExtension {
+  id: string
+  name: string
+  description: string
+  content: string
+  isBuiltin: boolean
+  enabled: boolean
+  modelPattern: string
+  mode: 'first' | 'every'
+  sourceUrl?: string
+  sourceCommit?: string
+  sourceFile?: string
   createdAt: number
   updatedAt: number
 }

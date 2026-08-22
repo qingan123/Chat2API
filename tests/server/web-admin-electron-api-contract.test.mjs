@@ -76,7 +76,8 @@ const expectedContract = {
     'onUpdateError',
   ],
   config: ['get', 'update', 'onConfigChanged'],
-  prompts: ['getAll', 'getBuiltin', 'getCustom', 'getById', 'add', 'update', 'delete', 'getByType'],
+  prompts: ['getAll', 'getBuiltin', 'getCustom', 'getById', 'add', 'update', 'delete', 'getByType', 'resetBuiltin'],
+  skills: ['getAll', 'getById', 'add', 'update', 'delete', 'resetBuiltin'],
   session: [
     'getConfig',
     'updateConfig',
@@ -89,7 +90,7 @@ const expectedContract = {
     'clearAll',
     'cleanExpired',
   ],
-  managementApi: ['getConfig', 'updateConfig', 'generateSecret'],
+  managementApi: ['getConfig', 'updateConfig', 'generateSecret', 'changeSecret'],
   contextManagement: ['getConfig', 'updateConfig'],
   toolCalling: ['getStatus', 'runSmoke'],
   tray: ['openDashboard', 'setHeight', 'quitApp'],
@@ -129,6 +130,21 @@ test('web admin keeps browser management secret in sync after settings changes',
     /updateConfig:\s*async[\s\S]*managementApiSecret[\s\S]*setManagementSecret\(nextConfig\.managementApiSecret\)/,
     'managementApi.updateConfig must store the updated secret when it changes',
   )
+  assert.match(
+    source,
+    /changeSecret:\s*async[\s\S]*\/management-api\/secret[\s\S]*setManagementSecret\(newSecret\)/,
+    'managementApi.changeSecret must call the dedicated endpoint and switch the browser session',
+  )
+})
+
+test('management settings exposes a confirmed login password change form', () => {
+  const source = fs.readFileSync('src/renderer/src/components/settings/ManagementApiSettings.tsx', 'utf8')
+
+  assert.match(source, /newSecret/)
+  assert.match(source, /confirmSecret/)
+  assert.match(source, /managementApi\.changeSecret/)
+  assert.match(source, /changePassword/)
+  assert.match(source, /minLength=\{6\}/)
 })
 
 test('web admin proxy start is idempotent when docker server is already running', () => {
@@ -214,4 +230,49 @@ test('web admin provides browser-assisted Qwen AI import instead of docker in-ap
 
   assert.match(electronTypes, /interface BrowserImportAPI/)
   assert.match(electronTypes, /browserImport: BrowserImportAPI/)
+})
+
+test('docker account dialogs share credential import behavior and hide unusable GLM electron oauth', () => {
+  const addAccountSource = fs.readFileSync('src/renderer/src/components/providers/AddAccountDialog.tsx', 'utf8')
+  const addProviderSource = fs.readFileSync('src/renderer/src/components/providers/AddProviderDialog.tsx', 'utf8')
+
+  for (const source of [addAccountSource, addProviderSource]) {
+    assert.match(source, /supportsCredentialImport/)
+    assert.match(source, /supportsBrowserCredentialImport/)
+    assert.match(source, /supportsInteractiveOAuth/)
+    assert.match(source, /normalizeProviderCredentials/)
+    assert.match(source, /dockerOAuthUnavailable/)
+    assert.match(source, /supportsAuthFlow/)
+    assert.match(
+      source,
+      /dockerOAuthUnavailable[\s\S]*CredentialImportPanel/,
+      'Docker/mobile manual fallback must show safe import guidance in both entry points',
+    )
+  }
+
+  assert.doesNotMatch(addAccountSource, /function mapOAuthCredentials/)
+  assert.doesNotMatch(addProviderSource, /function mapOAuthCredentials/)
+})
+
+test('browser credential import never logs the raw payload', () => {
+  const source = fs.readFileSync('src/renderer/src/web-admin-api.ts', 'utf8')
+  assert.doesNotMatch(source, /console\.log\([^\n]*payloadText/)
+})
+
+test('provider dialogs fit a 390px mobile viewport without horizontal overflow', () => {
+  const dialogSource = fs.readFileSync('src/renderer/src/components/ui/dialog.tsx', 'utf8')
+  const addAccountSource = fs.readFileSync('src/renderer/src/components/providers/AddAccountDialog.tsx', 'utf8')
+  const addProviderSource = fs.readFileSync('src/renderer/src/components/providers/AddProviderDialog.tsx', 'utf8')
+
+  assert.match(dialogSource, /w-\[calc\(100%-1rem\)\]/)
+  for (const source of [addAccountSource, addProviderSource]) {
+    assert.match(source, /p-4/)
+    assert.match(source, /sm:p-6/)
+  }
+})
+
+test('credential validation logs never include token fragments or response bodies', () => {
+  const source = fs.readFileSync('src/main/providers/checker.ts', 'utf8')
+  assert.doesNotMatch(source, /Validating Token:[^\n]*substring/)
+  assert.doesNotMatch(source, /Response data:[^\n]*JSON\.stringify/)
 })

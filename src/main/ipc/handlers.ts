@@ -902,6 +902,14 @@ export async function registerIpcHandlers(mainWindow: BrowserWindow | null): Pro
     return storeManager.getSystemPromptsByType(type)
   })
 
+  ipcMain.handle(IpcChannels.PROMPTS_RESET_BUILTIN, async (_, id: string) => storeManager.resetBuiltinPrompt(id))
+  ipcMain.handle(IpcChannels.SKILLS_GET_ALL, async () => storeManager.getSkills())
+  ipcMain.handle(IpcChannels.SKILLS_GET_BY_ID, async (_, id: string) => storeManager.getSkillById(id))
+  ipcMain.handle(IpcChannels.SKILLS_ADD, async (_, skill) => storeManager.addSkill(skill))
+  ipcMain.handle(IpcChannels.SKILLS_UPDATE, async (_, id: string, updates) => storeManager.updateSkill(id, updates))
+  ipcMain.handle(IpcChannels.SKILLS_DELETE, async (_, id: string) => storeManager.deleteSkill(id))
+  ipcMain.handle(IpcChannels.SKILLS_RESET_BUILTIN, async (_, id: string) => storeManager.resetBuiltinSkill(id))
+
   // ==================== Session Management Handlers ====================
 
   ipcMain.handle(IpcChannels.SESSION_GET_CONFIG, async (): Promise<SessionConfig> => {
@@ -970,6 +978,19 @@ export async function registerIpcHandlers(mainWindow: BrowserWindow | null): Pro
     
     return newSecret
   })
+
+  ipcMain.handle(
+    IpcChannels.MANAGEMENT_API_CHANGE_SECRET,
+    async (_, input: { newSecret: string; confirmSecret: string }): Promise<{ changed: true }> => {
+      const newSecret = input.newSecret
+      if (newSecret !== input.confirmSecret) throw new Error('Management Secret confirmation does not match.')
+      if (newSecret.length < 6 || /[\r\n]/.test(newSecret)) throw new Error('Management Secret must be at least 6 characters without line breaks.')
+      const config = ConfigManager.get()
+      if (config.managementApi.managementApiSecret === newSecret) throw new Error('New Management Secret must differ from the current value.')
+      ConfigManager.update({ managementApi: { ...config.managementApi, managementApiSecret: newSecret } })
+      return { changed: true }
+    },
+  )
 
   // ==================== Context Management Handlers ====================
 

@@ -37,7 +37,8 @@ import {
   normalizeModelMappingsWithDefaults,
   sanitizeDeepSeekModelOverrides,
 } from './types'
-import { BUILTIN_PROMPTS } from '../data/builtin-prompts'
+import type { SkillExtension } from '../../shared/types'
+import { BUILTIN_SKILLS, BUILTIN_SYSTEM_PROMPTS } from '../data/builtin-prompt-extensions'
 import { RequestLogManager } from '../requestLogs/manager'
 import { normalizeRequestLogConfig } from '../requestLogs/types'
 import { normalizeToolCallingConfig } from '../../shared/toolCalling'
@@ -101,6 +102,7 @@ class StoreManager {
       await this.initializeRequestLogManager(storagePath)
       this.initializeDefaultModelMappings()
       await this.initializeDefaultProviders()
+      this.initializePromptExtensions()
       this.isInitialized = true
       this.initializationError = null
     } catch (error) {
@@ -115,6 +117,7 @@ class StoreManager {
         await this.initializeRequestLogManager(storagePath)
         this.initializeDefaultModelMappings()
         await this.initializeDefaultProviders()
+        this.initializePromptExtensions()
         this.isInitialized = true
         this.initializationError = null
         console.log('[Store] Successfully recovered from corrupted data')
@@ -195,6 +198,7 @@ class StoreManager {
       logs: [],
       requestLogs: [],
       systemPrompts: [],
+      skills: [],
       sessions: [],
       statistics: DEFAULT_STATISTICS,
       userModelOverrides: DEFAULT_USER_MODEL_OVERRIDES,
@@ -271,6 +275,22 @@ class StoreManager {
       },
       defaultModelMappingsSeeded: true,
     }))
+  }
+
+  private initializePromptExtensions(): void {
+    const prompts = (this.store?.get('systemPrompts') || []) as SystemPrompt[]
+    const promptIds = new Set(prompts.map(prompt => prompt.id))
+    const missingPrompts = BUILTIN_SYSTEM_PROMPTS.filter(prompt => !promptIds.has(prompt.id))
+    if (missingPrompts.length > 0) {
+      this.store?.set('systemPrompts', [...prompts, ...missingPrompts])
+    }
+
+    const skills = (this.store?.get('skills') || []) as SkillExtension[]
+    const skillIds = new Set(skills.map(skill => skill.id))
+    const missingSkills = BUILTIN_SKILLS.filter(skill => !skillIds.has(skill.id))
+    if (missingSkills.length > 0) {
+      this.store?.set('skills', [...skills, ...missingSkills])
+    }
   }
 
   /**
@@ -1341,23 +1361,21 @@ class StoreManager {
    */
   getSystemPrompts(): SystemPrompt[] {
     this.ensureInitialized()
-    const customPrompts = this.store!.get('systemPrompts') || []
-    return [...BUILTIN_PROMPTS, ...customPrompts]
+    return this.store!.get('systemPrompts') || []
   }
 
   /**
    * Get Built-in System Prompts
    */
   getBuiltinPrompts(): SystemPrompt[] {
-    return BUILTIN_PROMPTS
+    return this.getSystemPrompts().filter(prompt => prompt.isBuiltin)
   }
 
   /**
    * Get Custom System Prompts
    */
   getCustomPrompts(): SystemPrompt[] {
-    this.ensureInitialized()
-    return this.store!.get('systemPrompts') || []
+    return this.getSystemPrompts().filter(prompt => !prompt.isBuiltin)
   }
 
   /**
@@ -1390,16 +1408,10 @@ class StoreManager {
 
   /**
    * Update Custom System Prompt
-   * Cannot update built-in prompts
+   * Built-in prompts can be edited/toggled and restored to defaults.
    */
   updateSystemPrompt(id: string, updates: Partial<SystemPrompt>): SystemPrompt | null {
     this.ensureInitialized()
-    
-    // Check if it's a built-in prompt
-    if (BUILTIN_PROMPTS.some(p => p.id === id)) {
-      console.warn('Cannot update built-in prompt:', id)
-      return null
-    }
     
     const prompts = this.store!.get('systemPrompts') || []
     const index = prompts.findIndex((p: SystemPrompt) => p.id === id)
@@ -1425,13 +1437,11 @@ class StoreManager {
   deleteSystemPrompt(id: string): boolean {
     this.ensureInitialized()
     
-    // Check if it's a built-in prompt
-    if (BUILTIN_PROMPTS.some(p => p.id === id)) {
+    const prompts = this.store!.get('systemPrompts') || []
+    if (prompts.some((p: SystemPrompt) => p.id === id && p.isBuiltin)) {
       console.warn('Cannot delete built-in prompt:', id)
       return false
     }
-    
-    const prompts = this.store!.get('systemPrompts') || []
     const index = prompts.findIndex((p: SystemPrompt) => p.id === id)
     
     if (index === -1) {
@@ -1449,6 +1459,85 @@ class StoreManager {
    */
   getSystemPromptsByType(type: SystemPrompt['type']): SystemPrompt[] {
     return this.getSystemPrompts().filter(p => p.type === type)
+  }
+
+  resetBuiltinPrompt(id: string): SystemPrompt | null {
+    this.ensureInitialized()
+    const builtin = BUILTIN_SYSTEM_PROMPTS.find(prompt => prompt.id === id)
+    if (!builtin) return null
+    const prompts = this.store!.get('systemPrompts') || []
+    const index = prompts.findIndex((prompt: SystemPrompt) => prompt.id === id)
+    const restored = { ...builtin, updatedAt: Date.now() }
+    if (index === -1) prompts.push(restored)
+    else prompts[index] = restored
+    this.store!.set('systemPrompts', prompts)
+    return restored
+  }
+
+  // ==================== Skill Extension Operations ====================
+
+  getSkills(): SkillExtension[] {
+    this.ensureInitialized()
+    return this.store!.get('skills') || []
+  }
+
+  getSkillById(id: string): SkillExtension | undefined {
+    return this.getSkills().find(skill => skill.id === id)
+  }
+
+  addSkill(skill: Omit<SkillExtension, 'id' | 'createdAt' | 'updatedAt'>): SkillExtension {
+    this.ensureInitialized()
+    const skills = this.getSkills()
+    const now = Date.now()
+    const created: SkillExtension = {
+      ...skill,
+      id: this.generateId(),
+      isBuiltin: false,
+      createdAt: now,
+      updatedAt: now,
+    }
+    skills.push(created)
+    this.store!.set('skills', skills)
+    return created
+  }
+
+  updateSkill(id: string, updates: Partial<SkillExtension>): SkillExtension | null {
+    this.ensureInitialized()
+    const skills = this.getSkills()
+    const index = skills.findIndex(skill => skill.id === id)
+    if (index === -1) return null
+    skills[index] = {
+      ...skills[index],
+      ...updates,
+      id: skills[index].id,
+      isBuiltin: skills[index].isBuiltin,
+      updatedAt: Date.now(),
+    }
+    this.store!.set('skills', skills)
+    return skills[index]
+  }
+
+  deleteSkill(id: string): boolean {
+    this.ensureInitialized()
+    const skills = this.getSkills()
+    const index = skills.findIndex(skill => skill.id === id)
+    if (index === -1 || skills[index].isBuiltin) return false
+    skills.splice(index, 1)
+    this.store!.set('skills', skills)
+    return true
+  }
+
+  resetBuiltinSkill(id: string): SkillExtension | null {
+    this.ensureInitialized()
+    const builtin = BUILTIN_SKILLS.find(skill => skill.id === id)
+    if (!builtin) return null
+    const skills = this.getSkills()
+    const index = skills.findIndex(skill => skill.id === id)
+    const restored = { ...builtin, updatedAt: Date.now() }
+    if (index === -1) skills.push(restored)
+    else skills[index] = restored
+    this.store!.set('skills', skills)
+    return restored
   }
 
   // ==================== Session Operations ====================
@@ -1900,6 +1989,7 @@ class StoreManager {
     const logs = this.getAppLogManager().exportLogs()
     const requestLogs = this.getRequestLogManager().exportRequestLogs()
     const systemPrompts = this.store!.get('systemPrompts') || []
+    const skills = this.store!.get('skills') || []
     const sessions = this.store!.get('sessions') || []
     const statistics = this.store!.get('statistics') || DEFAULT_STATISTICS
     const userModelOverrides = this.store!.get('userModelOverrides') || DEFAULT_USER_MODEL_OVERRIDES
@@ -1911,6 +2001,7 @@ class StoreManager {
       logs,
       requestLogs,
       systemPrompts,
+      skills,
       sessions,
       statistics,
       userModelOverrides,

@@ -11,6 +11,7 @@ import { storeManager } from '../../../store/store'
 import { createAdapter } from '../../../oauth/adapters'
 import { getRuntime } from '../../../runtime'
 import { generateManagementSecret } from '../../middleware/managementAuth'
+import { rotateConfiguredManagementSecret } from '../../../../server/managementSecretService'
 import type {
   ManagementApiResponse,
   StatisticsResponse,
@@ -19,6 +20,7 @@ import type {
   LogEntry,
   LogLevel,
   SystemPrompt,
+  SkillExtension,
 } from '../../../../shared/types'
 import type { RequestLogEntry } from '../../../store/types'
 import type { ProviderType } from '../../../oauth/types'
@@ -699,6 +701,61 @@ router.delete('/prompts/:id', async (ctx: Context) => {
   } as ManagementApiResponse<boolean>
 })
 
+router.post('/prompts/:id/reset', async (ctx: Context) => {
+  const prompt = storeManager.resetBuiltinPrompt(ctx.params.id)
+  if (!prompt) {
+    ctx.status = 404
+    ctx.body = { success: false, error: { code: 'not_found', message: 'Built-in prompt not found' } } as ManagementApiResponse
+    return
+  }
+  ctx.body = { success: true, data: prompt } as ManagementApiResponse<SystemPrompt>
+})
+
+router.get('/skills', async (ctx: Context) => {
+  ctx.body = { success: true, data: storeManager.getSkills() } as ManagementApiResponse<SkillExtension[]>
+})
+
+router.get('/skills/:id', async (ctx: Context) => {
+  const skill = storeManager.getSkillById(ctx.params.id)
+  if (!skill) {
+    ctx.status = 404
+    ctx.body = { success: false, error: { code: 'not_found', message: 'Skill not found' } } as ManagementApiResponse
+    return
+  }
+  ctx.body = { success: true, data: skill } as ManagementApiResponse<SkillExtension>
+})
+
+router.post('/skills', async (ctx: Context) => {
+  ctx.status = 201
+  ctx.body = { success: true, data: storeManager.addSkill(ctx.request.body as Omit<SkillExtension, 'id' | 'createdAt' | 'updatedAt'>) } as ManagementApiResponse<SkillExtension>
+})
+
+router.put('/skills/:id', async (ctx: Context) => {
+  const skill = storeManager.updateSkill(ctx.params.id, ctx.request.body as Partial<SkillExtension>)
+  if (!skill) ctx.status = 404
+  ctx.body = skill
+    ? { success: true, data: skill } as ManagementApiResponse<SkillExtension>
+    : { success: false, error: { code: 'not_found', message: 'Skill not found' } } as ManagementApiResponse
+})
+
+router.delete('/skills/:id', async (ctx: Context) => {
+  const deleted = storeManager.deleteSkill(ctx.params.id)
+  if (!deleted) ctx.status = 400
+  ctx.body = deleted
+    ? { success: true, data: true } as ManagementApiResponse<boolean>
+    : { success: false, error: { code: 'not_deletable', message: 'Built-in skills cannot be deleted' } } as ManagementApiResponse
+})
+
+router.post('/skills/:id/reset', async (ctx: Context) => {
+  const skill = storeManager.resetBuiltinSkill(ctx.params.id)
+  if (!skill) {
+    ctx.status = 404
+    ctx.body = { success: false, error: { code: 'not_found', message: 'Built-in skill not found' } } as ManagementApiResponse
+    return
+  }
+  ctx.body = { success: true, data: skill } as ManagementApiResponse<SkillExtension>
+})
+
 router.get('/store/:key', async (ctx: Context) => {
   const key = ctx.params.key as 'providers' | 'accounts' | 'config' | 'logs'
   ctx.body = {
@@ -871,14 +928,31 @@ router.post('/oauth/refresh-token', async (ctx: Context) => {
 
 router.post('/management-api/generate-secret', async (ctx: Context) => {
   const secret = generateManagementSecret()
-  const config = storeManager.getConfig()
-  storeManager.updateConfig({
-    managementApi: {
-      ...config.managementApi,
-      managementApiSecret: secret,
-    },
+  rotateConfiguredManagementSecret({
+    newSecret: secret,
+    confirmSecret: secret,
   })
   ctx.body = { success: true, data: secret } as ManagementApiResponse<string>
+})
+
+router.put('/management-api/secret', async (ctx: Context) => {
+  const body = ctx.request.body as { newSecret?: unknown; confirmSecret?: unknown }
+  try {
+    rotateConfiguredManagementSecret({
+      newSecret: typeof body?.newSecret === 'string' ? body.newSecret : '',
+      confirmSecret: typeof body?.confirmSecret === 'string' ? body.confirmSecret : '',
+    })
+    ctx.body = { success: true, data: { changed: true } } as ManagementApiResponse<{ changed: true }>
+  } catch (error) {
+    ctx.status = 400
+    ctx.body = {
+      success: false,
+      error: {
+        code: 'invalid_management_secret',
+        message: error instanceof Error ? error.message : 'Failed to update Management Secret.',
+      },
+    } as ManagementApiResponse
+  }
 })
 
 router.post('/app/open-external', async (ctx: Context) => {

@@ -13,6 +13,7 @@ import type {
   ProviderVendor,
   AppConfig,
   SystemPrompt,
+  SkillExtension,
   PromptType,
   EffectiveModel,
   QwenAiGovernorConfig,
@@ -544,6 +545,18 @@ const promptsAPI = {
   
   getByType: (type: PromptType): Promise<SystemPrompt[]> => 
     ipcRenderer.invoke(IpcChannels.PROMPTS_GET_BY_TYPE, type),
+
+  resetBuiltin: (id: string): Promise<SystemPrompt | null> =>
+    ipcRenderer.invoke(IpcChannels.PROMPTS_RESET_BUILTIN, id),
+}
+
+const skillsAPI = {
+  getAll: (): Promise<SkillExtension[]> => ipcRenderer.invoke(IpcChannels.SKILLS_GET_ALL),
+  getById: (id: string): Promise<SkillExtension | undefined> => ipcRenderer.invoke(IpcChannels.SKILLS_GET_BY_ID, id),
+  add: (skill: Omit<SkillExtension, 'id' | 'createdAt' | 'updatedAt'>): Promise<SkillExtension> => ipcRenderer.invoke(IpcChannels.SKILLS_ADD, skill),
+  update: (id: string, updates: Partial<SkillExtension>): Promise<SkillExtension | null> => ipcRenderer.invoke(IpcChannels.SKILLS_UPDATE, id, updates),
+  delete: (id: string): Promise<boolean> => ipcRenderer.invoke(IpcChannels.SKILLS_DELETE, id),
+  resetBuiltin: (id: string): Promise<SkillExtension | null> => ipcRenderer.invoke(IpcChannels.SKILLS_RESET_BUILTIN, id),
 }
 
 interface SessionConfig {
@@ -635,6 +648,9 @@ const managementApiAPI = {
   
   generateSecret: (): Promise<string> => 
     ipcRenderer.invoke(IpcChannels.MANAGEMENT_API_GENERATE_SECRET),
+
+  changeSecret: (newSecret: string, confirmSecret: string): Promise<{ changed: true }> =>
+    ipcRenderer.invoke(IpcChannels.MANAGEMENT_API_CHANGE_SECRET, { newSecret, confirmSecret }),
 }
 
 const contextManagementAPI = {
@@ -781,6 +797,7 @@ const electronAPI = {
   app: appAPI,
   config: configAPI,
   prompts: promptsAPI,
+  skills: skillsAPI,
   session: sessionAPI,
   managementApi: managementApiAPI,
   contextManagement: contextManagementAPI,

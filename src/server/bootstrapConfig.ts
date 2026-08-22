@@ -1,5 +1,9 @@
 import type { AppConfig, LoadBalanceStrategy } from '../main/store/types'
 import { storeManager } from '../main/store/store'
+import {
+  configuredManagementSecretFile,
+  resolveManagementSecret,
+} from './managementSecretFile'
 
 const VALID_STRATEGIES = new Set<LoadBalanceStrategy>([
   'round-robin',
@@ -34,7 +38,10 @@ export function createServerConfigOverrides(): Partial<AppConfig> {
   const host = process.env.CHAT2API_HOST
   const strategy = process.env.CHAT2API_LOAD_BALANCE_STRATEGY as LoadBalanceStrategy | undefined
   const enableManagementApi = parseBoolean(process.env.CHAT2API_ENABLE_MANAGEMENT_API)
-  const managementSecret = process.env.CHAT2API_MANAGEMENT_SECRET
+  const managementSecret = resolveManagementSecret({
+    filePath: configuredManagementSecretFile(),
+    environmentSecret: process.env.CHAT2API_MANAGEMENT_SECRET,
+  })
   const enableApiKey = parseBoolean(process.env.CHAT2API_ENABLE_API_KEY)
   const logLevel = process.env.CHAT2API_LOG_LEVEL as AppConfig['logLevel'] | undefined
 

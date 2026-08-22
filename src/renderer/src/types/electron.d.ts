@@ -18,6 +18,7 @@ import type {
   ProviderStatus,
   ApiKey,
   SystemPrompt,
+  SkillExtension,
   PromptType,
   ToolCallingConfig,
   LegacyToolPromptConfig,
@@ -47,6 +48,7 @@ export type {
   ProviderStatus,
   ApiKey,
   SystemPrompt,
+  SkillExtension,
   PromptType,
   ToolCallingConfig,
   LegacyToolPromptConfig,
@@ -317,6 +319,16 @@ interface PromptsAPI {
   update: (id: string, updates: Partial<SystemPrompt>) => Promise<SystemPrompt | null>
   delete: (id: string) => Promise<boolean>
   getByType: (type: PromptType) => Promise<SystemPrompt[]>
+  resetBuiltin: (id: string) => Promise<SystemPrompt | null>
+}
+
+interface SkillsAPI {
+  getAll: () => Promise<SkillExtension[]>
+  getById: (id: string) => Promise<SkillExtension | undefined>
+  add: (skill: Omit<SkillExtension, 'id' | 'createdAt' | 'updatedAt'>) => Promise<SkillExtension>
+  update: (id: string, updates: Partial<SkillExtension>) => Promise<SkillExtension | null>
+  delete: (id: string) => Promise<boolean>
+  resetBuiltin: (id: string) => Promise<SkillExtension | null>
 }
 
 interface SessionConfig {
@@ -456,8 +468,9 @@ interface ManagementApiConfig {
 
 interface ManagementApiAPI {
   getConfig: () => Promise<ManagementApiConfig>
-  updateConfig: (updates: Partial<ManagementApiConfig>) => Promise<boolean>
+  updateConfig: (updates: Partial<ManagementApiConfig>) => Promise<ManagementApiConfig>
   generateSecret: () => Promise<string>
+  changeSecret: (newSecret: string, confirmSecret: string) => Promise<{ changed: true }>
 }
 
 interface StrategyConfig {
@@ -512,6 +525,7 @@ interface ElectronAPI {
   app: AppAPI
   config: ConfigAPI
   prompts: PromptsAPI
+  skills: SkillsAPI
   session: SessionAPI
   managementApi: ManagementApiAPI
   contextManagement: ContextManagementAPI

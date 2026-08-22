@@ -30,125 +30,8 @@ import {
   Check
 } from 'lucide-react'
 import type { Provider, CredentialField, Account, BuiltinProviderConfig, ProviderVendor } from '@/types/electron'
-
-/**
- * Map OAuth credentials to provider credential field names
- * OAuth returns credentials with keys like 'chatglm_refresh_token', but providers expect 'refresh_token'
- * DeepSeek stores token as JSON: {"value":"..."}
- */
-function mapOAuthCredentials(providerId: string | undefined, credentials: Record<string, string>): Record<string, string> {
-  if (!providerId) return credentials
-
-  const credentialKeyMap: Record<string, string> = {
-    'glm': 'chatglm_refresh_token',
-    'deepseek': 'userToken',
-    'qwen': 'tongyi_sso_ticket',
-    'zai': 'tongyi_sso_ticket',
-    'perplexity': '__Secure-next-auth.session-token',
-    'mimo': 'serviceToken',
-  }
-
-  const providerFieldNames: Record<string, string> = {
-    'glm': 'refresh_token',
-    'deepseek': 'token',
-    'qwen': 'ticket',
-    'zai': 'ticket',
-    'perplexity': 'sessionToken',
-    'mimo': 'service_token',
-  }
-
-  if (providerId === 'qwen-ai') {
-    return {
-      token: credentials.token || '',
-      ...(credentials.cookies ? { cookies: credentials.cookies } : {}),
-      ...(credentials.baxiaUidToken ? { baxiaUidToken: credentials.baxiaUidToken } : {}),
-      ...(credentials.baxiaUa ? { baxiaUa: credentials.baxiaUa } : {}),
-      ...(credentials.baxiaVersion ? { baxiaVersion: credentials.baxiaVersion } : {}),
-      ...(credentials.x5secdata ? { x5secdata: credentials.x5secdata } : {}),
-      ...(credentials.x5sectag ? { x5sectag: credentials.x5sectag } : {}),
-    }
-  }
-
-  if (providerId === 'kimi') {
-    const refreshToken = credentials.refreshToken || credentials.refresh_token || ''
-    const token = credentials.accessToken
-      || credentials.access_token
-      || credentials.token
-      || credentials.kimiAuth
-      || credentials['kimi-auth']
-      || refreshToken
-      || ''
-    const trafficId = credentials.trafficId
-      || credentials.traffic_id
-      || credentials.userId
-      || credentials.user_id
-      || credentials.mshUserId
-      || credentials.msh_user_id
-      || ''
-    const deviceId = credentials.deviceId || credentials.device_id || credentials.webId || credentials.web_id || ''
-    const sessionId = credentials.sessionId || credentials.session_id || credentials.ssid || ''
-    return {
-      token,
-      ...(refreshToken ? { refreshToken } : {}),
-      ...(deviceId ? { deviceId } : {}),
-      ...(sessionId ? { sessionId } : {}),
-      ...(trafficId ? { trafficId } : {}),
-    }
-  }
-
-  const oauthKey = credentialKeyMap[providerId]
-  if (oauthKey && credentials[oauthKey]) {
-    const fieldName = providerFieldNames[providerId]
-    if (fieldName) {
-      // Handle JSON-wrapped tokens (DeepSeek stores token as {"value":"..."})
-      let tokenValue = credentials[oauthKey]
-      if (providerId === 'deepseek' && tokenValue && tokenValue.startsWith('{') && tokenValue.endsWith('}')) {
-        try {
-          const parsed = JSON.parse(tokenValue)
-          if (parsed.value) {
-            tokenValue = parsed.value
-          }
-        } catch (e) {
-          console.error('[AddAccountDialog] Error parsing JSON token:', e)
-        }
-      }
-      return { [fieldName]: tokenValue }
-    }
-  }
-
-  // For Perplexity, if we have the secure token, map it
-  if (providerId === 'perplexity' && credentials['__Secure-next-auth.session-token']) {
-    return { sessionToken: credentials['__Secure-next-auth.session-token'] }
-  }
-  if (providerId === 'perplexity' && credentials['next-auth.session-token']) {
-    return { sessionToken: credentials['next-auth.session-token'] }
-  }
-
-  // For Mimo, map all three tokens
-  if (providerId === 'mimo') {
-    const result: Record<string, string> = {}
-    // OAuth already returns credentials in correct format (service_token, user_id, ph_token)
-    // Check for final format first
-    if (credentials['service_token']) {
-      result['service_token'] = credentials['service_token']
-    } else if (credentials['serviceToken']) {
-      result['service_token'] = credentials['serviceToken']
-    }
-    if (credentials['user_id']) {
-      result['user_id'] = credentials['user_id']
-    } else if (credentials['userId']) {
-      result['user_id'] = credentials['userId']
-    }
-    if (credentials['ph_token']) {
-      result['ph_token'] = credentials['ph_token']
-    } else if (credentials['xiaomichatbot_ph']) {
-      result['ph_token'] = credentials['xiaomichatbot_ph']
-    }
-    return result
-  }
-
-  return credentials
-}
+import { CredentialImportPanel } from './CredentialImportPanel'
+import { normalizeProviderCredentials, supportsCredentialImport } from '@shared/credentialImport'
 
 function selectVisibleTextArea(textarea: HTMLTextAreaElement | null): boolean {
   if (!textarea) return false
@@ -260,7 +143,10 @@ export function AddAccountDialog({
     : []
   const supportsOAuth = provider && ['deepseek', 'glm', 'kimi', 'mimo', 'minimax', 'qwen', 'qwen-ai', 'zai', 'perplexity'].includes(provider.id)
   const isDockerWebAdmin = !!window.__CHAT2API_WEB_ADMIN__
-  const supportsBrowserImport = isDockerWebAdmin && provider && ['qwen', 'qwen-ai', 'kimi'].includes(provider.id)
+  const supportsInteractiveOAuth = Boolean(supportsOAuth && !isDockerWebAdmin)
+  const supportsBrowserCredentialImport = Boolean(isDockerWebAdmin && provider && ['qwen', 'qwen-ai', 'kimi'].includes(provider.id))
+  const supportsAuthFlow = supportsInteractiveOAuth || supportsBrowserCredentialImport
+  const canImportCredentials = supportsCredentialImport(provider?.id)
 
   useEffect(() => {
     if (open) {
@@ -363,12 +249,7 @@ export function AddAccountDialog({
     setIsSubmitting(true)
 
     try {
-      // For MiniMax, ensure realUserID is passed correctly
-      let finalCredentials = { ...credentials }
-      if (provider?.id === 'minimax' && credentials.realUserID && credentials.realUserID.trim()) {
-        // realUserID is provided separately, keep both fields
-        console.log('[AddAccountDialog] MiniMax realUserID provided:', credentials.realUserID)
-      }
+      const finalCredentials = { ...credentials }
 
       const accountEmail = provider?.id === 'qwen-ai'
         ? finalCredentials.email?.trim() || undefined
@@ -413,7 +294,7 @@ export function AddAccountDialog({
       
       if (result?.success && result.credentials) {
         // Map OAuth credentials to provider credential field names
-        const mappedCredentials = mapOAuthCredentials(provider?.id, result.credentials)
+        const mappedCredentials = normalizeProviderCredentials(provider?.id, result.credentials)
         setCredentials(prev => ({
           ...prev,
           ...mappedCredentials,
@@ -494,7 +375,7 @@ export function AddAccountDialog({
     error?: string
   }): boolean => {
     if (session.status === 'success' && session.credentials) {
-      const mappedCredentials = mapOAuthCredentials(provider?.id, session.credentials)
+      const mappedCredentials = normalizeProviderCredentials(provider?.id, session.credentials)
       setCredentials(prev => ({
         ...prev,
         ...mappedCredentials,
@@ -575,7 +456,7 @@ export function AddAccountDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[560px]">
+        <DialogContent className="max-h-[90vh] overflow-y-auto p-4 sm:max-w-[560px] sm:p-6">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <User className="h-5 w-5" />
@@ -608,14 +489,22 @@ export function AddAccountDialog({
               />
             </div>
 
-            {supportsOAuth && !isEditing && (
+            {supportsAuthFlow && !isEditing && (
               <Tabs value={activeTab} onValueChange={setActiveTab}>
                 <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value="manual">{t('providers.manualInput')}</TabsTrigger>
                   <TabsTrigger value="oauth">{t('providers.oauthLogin')}</TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="manual" className="mt-4">
+                <TabsContent value="manual" className="mt-4 space-y-4">
+                  {isDockerWebAdmin && supportsOAuth && (
+                    <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                      {t('providers.dockerOAuthUnavailable')}
+                    </div>
+                  )}
+                  {canImportCredentials && provider && (
+                    <CredentialImportPanel providerId={provider.id} onApply={parsed => { setCredentials(prev => ({ ...prev, ...parsed })); setValidationResult({}) }} t={t} />
+                  )}
                   <CredentialFieldsForm
                     fields={credentialFields}
                     credentials={credentials}
@@ -626,7 +515,7 @@ export function AddAccountDialog({
                 </TabsContent>
 
                 <TabsContent value="oauth" className="mt-4">
-                  {supportsBrowserImport ? (
+                  {supportsBrowserCredentialImport ? (
                     <div className="space-y-4">
                       <div className="rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
                         <p className="font-medium text-foreground">{t('providers.browserImportTitle')}</p>
@@ -759,14 +648,18 @@ export function AddAccountDialog({
               </Tabs>
             )}
 
-            {(!supportsOAuth || isEditing) && (
-              <CredentialFieldsForm
-                fields={credentialFields}
-                credentials={credentials}
-                onChange={handleCredentialChange}
-                t={t}
-                providerId={provider?.id}
-              />
+            {(!supportsAuthFlow || isEditing) && (
+              <div className="space-y-4">
+                {isDockerWebAdmin && supportsOAuth && !isEditing && (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                    {t('providers.dockerOAuthUnavailable')}
+                  </div>
+                )}
+                {canImportCredentials && provider && (
+                  <CredentialImportPanel providerId={provider.id} onApply={parsed => { setCredentials(prev => ({ ...prev, ...parsed })); setValidationResult({}) }} t={t} />
+                )}
+                <CredentialFieldsForm fields={credentialFields} credentials={credentials} onChange={handleCredentialChange} t={t} providerId={provider?.id} />
+              </div>
             )}
 
             {validationResult.error && (

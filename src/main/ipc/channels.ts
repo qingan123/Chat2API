@@ -102,6 +102,14 @@ export const IpcChannels = {
   PROMPTS_UPDATE: 'prompts:update',
   PROMPTS_DELETE: 'prompts:delete',
   PROMPTS_GET_BY_TYPE: 'prompts:getByType',
+  PROMPTS_RESET_BUILTIN: 'prompts:resetBuiltin',
+
+  SKILLS_GET_ALL: 'skills:getAll',
+  SKILLS_GET_BY_ID: 'skills:getById',
+  SKILLS_ADD: 'skills:add',
+  SKILLS_UPDATE: 'skills:update',
+  SKILLS_DELETE: 'skills:delete',
+  SKILLS_RESET_BUILTIN: 'skills:resetBuiltin',
 
   SESSION_GET_CONFIG: 'session:getConfig',
   SESSION_UPDATE_CONFIG: 'session:updateConfig',
@@ -117,6 +125,7 @@ export const IpcChannels = {
   MANAGEMENT_API_GET_CONFIG: 'managementApi:getConfig',
   MANAGEMENT_API_UPDATE_CONFIG: 'managementApi:updateConfig',
   MANAGEMENT_API_GENERATE_SECRET: 'managementApi:generateSecret',
+  MANAGEMENT_API_CHANGE_SECRET: 'managementApi:changeSecret',
 
   CONTEXT_MANAGEMENT_GET_CONFIG: 'contextManagement:getConfig',
   CONTEXT_MANAGEMENT_UPDATE_CONFIG: 'contextManagement:updateConfig',

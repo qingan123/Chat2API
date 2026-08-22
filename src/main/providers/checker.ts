@@ -184,7 +184,7 @@ export class ProviderChecker {
 
   private static async checkDeepSeekToken(token: string): Promise<TokenCheckResult> {
     try {
-      console.log('[DeepSeek] Validating Token:', token.substring(0, 20) + '...')
+      console.log('[DeepSeek] Validating credentials')
       
       const response = await axios.get(
         'https://chat.deepseek.com/api/v0/users/current',
@@ -202,7 +202,7 @@ export class ProviderChecker {
       )
       
       console.log('[DeepSeek] Response status:', response.status)
-      console.log('[DeepSeek] Response data:', JSON.stringify(response.data, null, 2))
+
       
       // Response format: { code: 0, data: { biz_data: { ... } } }
       if (response.status === 200 && response.data?.code === 0 && response.data?.data?.biz_data) {
@@ -234,7 +234,7 @@ export class ProviderChecker {
 
   private static async checkGLMToken(refreshToken: string): Promise<TokenCheckResult> {
     try {
-      console.log('[GLM] Validating Token:', refreshToken.substring(0, 20) + '...')
+      console.log('[GLM] Validating credentials')
       
       const sign = await this.generateGLMSignV2()
       
@@ -279,7 +279,7 @@ export class ProviderChecker {
       )
       
       console.log('[GLM] Response status:', response.status)
-      console.log('[GLM] Response data:', JSON.stringify(response.data, null, 2))
+
       
       if (response.status === 200 && response.data?.result?.access_token) {
         return {
@@ -531,7 +531,7 @@ export class ProviderChecker {
     token: string
   ): Promise<TokenCheckResult> {
     try {
-      console.log('[MiniMax] Validating Token:', token.substring(0, 30) + '...')
+      console.log('[MiniMax] Validating credentials')
       
       const crypto = await import('crypto')
       
@@ -616,7 +616,7 @@ export class ProviderChecker {
       )
       
       console.log('[MiniMax] Response status:', response.status)
-      console.log('[MiniMax] Response data:', JSON.stringify(response.data, null, 2))
+
       
       if (response.status === 200 && response.data?.data?.deviceIDStr) {
         const userInfo = response.data.data.userInfo

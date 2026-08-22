@@ -1,6 +1,6 @@
 # 🚀 服务器一键部署与更新
 
-> 适用于 Ubuntu / Debian 无桌面服务器。安装脚本会在 SSH 中交互输入部署端口和项目原生的 Management Secret（留空可自动生成），自动部署完整 Py 版 `/admin/` WebUI；API Key 单独生成并保存为仅 root 可读文件。更新前会备份账户、配置、凭据和运行数据。
+> 适用于 Ubuntu / Debian 无桌面服务器。安装脚本会在 SSH 中交互输入部署端口和后台登录密码（项目原生 Management Secret，留空可自动生成），自动部署完整 Py 版 `/admin/` WebUI；API Key 单独生成并保存为仅 root 可读文件。后台可以修改登录密码，修改后旧密码立即失效，并在重启、更新后保持。更新前会备份账户、配置、凭据和运行数据。
 
 **部署我的 Fork 版**
 
@@ -21,6 +21,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/qingan123/Chat2API/main/scri
 ```
 
 默认目录：Fork版 `/opt/chat2api-<端口>`，Py 上游版 `/opt/chat2api-py-upstream-<端口>`。后台地址为 `http://公网IP:<端口>/admin/`，OpenAI Base URL 为 `http://公网IP:<端口>/v1`。部署成功不等于云安全组、防火墙、NAT 或反向代理已经放行端口。
+
+本 Fork 新增“技能与提示词”页面，完整携带 BaiduChat 的 1 条系统提示词和 7 个 DeepSeek 技能正文，全部默认关闭。启用后可按模型通配符以及首次请求/每次请求规则注入；内置项目可编辑、启停和恢复默认，自定义项目支持新增、编辑与删除。
 
 后续对比 `pyf-feifei/Chat2API` 与官方 `xiaoY233/Chat2API`、同步上游、解决冲突、测试和回滚，请阅读 [`docs/MAINTENANCE_CN.md`](docs/MAINTENANCE_CN.md)。
 

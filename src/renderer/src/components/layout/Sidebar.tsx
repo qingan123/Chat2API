@@ -13,6 +13,7 @@ import {
   Cpu,
   Info,
   MessageSquare,
+  WandSparkles,
   AlertTriangle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -40,6 +41,7 @@ const navItems: NavItem[] = [
   { titleKey: 'nav.proxy', href: '/proxy', icon: Settings2 },
   { titleKey: 'nav.models', href: '/models', icon: Cpu },
   { titleKey: 'nav.session', href: '/session', icon: MessageSquare },
+  { titleKey: 'nav.promptExtensions', href: '/prompt-extensions', icon: WandSparkles },
   { titleKey: 'nav.apiKeys', href: '/api-keys', icon: Key },
   { titleKey: 'nav.logs', href: '/logs', icon: FileText },
   { titleKey: 'nav.settings', href: '/settings', icon: Settings },
