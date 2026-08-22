@@ -139,12 +139,15 @@ test('web admin keeps browser management secret in sync after settings changes',
 
 test('management settings exposes a confirmed login password change form', () => {
   const source = fs.readFileSync('src/renderer/src/components/settings/ManagementApiSettings.tsx', 'utf8')
+  const page = fs.readFileSync('src/renderer/src/pages/Settings.tsx', 'utf8')
 
   assert.match(source, /newSecret/)
   assert.match(source, /confirmSecret/)
   assert.match(source, /managementApi\.changeSecret/)
   assert.match(source, /changePassword/)
   assert.match(source, /minLength=\{6\}/)
+  assert.match(page, /defaultValue="managementApi"/)
+  assert.match(page, /ManagementApiSettings/)
 })
 
 test('web admin proxy start is idempotent when docker server is already running', () => {
@@ -257,6 +260,26 @@ test('docker account dialogs share credential import behavior and hide unusable 
 test('browser credential import never logs the raw payload', () => {
   const source = fs.readFileSync('src/renderer/src/web-admin-api.ts', 'utf8')
   assert.doesNotMatch(source, /console\.log\([^\n]*payloadText/)
+})
+
+test('mobile Docker OAuth flow covers every built-in provider', () => {
+  const account = fs.readFileSync('src/renderer/src/components/providers/AddAccountDialog.tsx', 'utf8')
+  const provider = fs.readFileSync('src/renderer/src/components/providers/AddProviderDialog.tsx', 'utf8')
+  const webApi = fs.readFileSync('src/renderer/src/web-admin-api.ts', 'utf8')
+  const route = fs.readFileSync('src/main/proxy/routes/management/statistics.ts', 'utf8')
+  for (const source of [account, provider]) {
+    assert.match(source, /supportsOAuth/)
+    assert.match(source, /openProviderLoginPage/)
+    assert.match(source, /CredentialImportPanel/)
+    assert.match(source, /supportsBrowserImportScript/)
+    assert.match(source, /supportsBrowserImportScript\s*&&/)
+  }
+  for (const providerId of ['qwen', 'qwen-ai', 'kimi']) {
+    assert.match(webApi + route, new RegExp(providerId))
+  }
+  for (const providerId of ['deepseek', 'glm', 'minimax', 'mimo', 'perplexity', 'zai']) {
+    assert.match(account + provider + webApi, new RegExp(providerId))
+  }
 })
 
 test('provider dialogs fit a 390px mobile viewport without horizontal overflow', () => {

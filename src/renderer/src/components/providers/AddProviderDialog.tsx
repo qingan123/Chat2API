@@ -181,7 +181,8 @@ export function AddProviderDialog({
   const supportsOAuth = selectedProviderData && ['deepseek', 'glm', 'kimi', 'mimo', 'minimax', 'qwen', 'qwen-ai', 'zai', 'perplexity'].includes(selectedProviderData.id)
   const isDockerWebAdmin = !!window.__CHAT2API_WEB_ADMIN__
   const supportsInteractiveOAuth = Boolean(supportsOAuth && !isDockerWebAdmin)
-  const supportsBrowserCredentialImport = Boolean(isDockerWebAdmin && selectedProviderData && ['qwen', 'qwen-ai', 'kimi'].includes(selectedProviderData.id))
+  const supportsBrowserCredentialImport = Boolean(isDockerWebAdmin && selectedProviderData)
+  const supportsBrowserImportScript = Boolean(isDockerWebAdmin && selectedProviderData && ['qwen', 'qwen-ai', 'kimi'].includes(selectedProviderData.id))
   const supportsAuthFlow = supportsInteractiveOAuth || supportsBrowserCredentialImport
   const canImportCredentials = supportsCredentialImport(selectedProviderData?.id)
   const oauthRefreshCredentialFields = selectedProviderData?.id === 'qwen-ai'
@@ -443,9 +444,15 @@ export function AddProviderDialog({
     if (!selectedProviderData) return
 
     const loginUrls: Record<string, string> = {
-      'qwen-ai': 'https://chat.qwen.ai',
-      qwen: 'https://www.qianwen.com',
+      deepseek: 'https://chat.deepseek.com',
+      glm: 'https://chatglm.cn',
       kimi: 'https://www.kimi.com',
+      minimax: 'https://hailuoai.video',
+      mimo: 'https://aistudio.xiaomimimo.com',
+      perplexity: 'https://www.perplexity.ai',
+      qwen: 'https://www.qianwen.com',
+      'qwen-ai': 'https://chat.qwen.ai',
+      zai: 'https://chat.z.ai',
     }
     await window.electronAPI?.app.openExternal(loginUrls[selectedProviderData.id] || selectedProviderData.apiEndpoint)
   }
@@ -896,6 +903,9 @@ export function AddProviderDialog({
                     <p className="font-medium text-foreground">{t('providers.browserImportTitle')}</p>
                     <p className="mt-1">{t('providers.browserImportDesc')}</p>
                   </div>
+                  {canImportCredentials && selectedProviderData && (
+                    <CredentialImportPanel providerId={selectedProviderData.id} onApply={parsed => { setCredentials(prev => ({ ...prev, ...parsed })); setValidationResult({}) }} t={t} />
+                  )}
                   {oauthRefreshCredentialFields.length > 0 && (
                     <div className="rounded-lg border p-3">
                       {renderCredentialFields(oauthRefreshCredentialFields)}
@@ -906,14 +916,16 @@ export function AddProviderDialog({
                       <ExternalLink className="mr-2 h-4 w-4" />
                       {t('providers.openProviderWebsite')}
                     </Button>
-                    <Button type="button" onClick={startBrowserImport} disabled={isBrowserImportWaiting && !!browserImportScript}>
-                      {isBrowserImportWaiting && !browserImportScript ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Copy className="mr-2 h-4 w-4" />
-                      )}
-                      {browserImportScript ? t('providers.regenerateImportScript') : t('providers.generateImportScript')}
-                    </Button>
+                    {supportsBrowserImportScript && (
+                      <Button type="button" onClick={startBrowserImport} disabled={isBrowserImportWaiting && !!browserImportScript}>
+                        {isBrowserImportWaiting && !browserImportScript ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Copy className="mr-2 h-4 w-4" />
+                        )}
+                        {browserImportScript ? t('providers.regenerateImportScript') : t('providers.generateImportScript')}
+                      </Button>
+                    )}
                   </div>
                   {browserImportScript && (
                     <div className="space-y-2">

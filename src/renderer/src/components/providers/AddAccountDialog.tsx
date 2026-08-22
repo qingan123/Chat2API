@@ -144,7 +144,8 @@ export function AddAccountDialog({
   const supportsOAuth = provider && ['deepseek', 'glm', 'kimi', 'mimo', 'minimax', 'qwen', 'qwen-ai', 'zai', 'perplexity'].includes(provider.id)
   const isDockerWebAdmin = !!window.__CHAT2API_WEB_ADMIN__
   const supportsInteractiveOAuth = Boolean(supportsOAuth && !isDockerWebAdmin)
-  const supportsBrowserCredentialImport = Boolean(isDockerWebAdmin && provider && ['qwen', 'qwen-ai', 'kimi'].includes(provider.id))
+  const supportsBrowserCredentialImport = Boolean(isDockerWebAdmin && provider)
+  const supportsBrowserImportScript = Boolean(isDockerWebAdmin && provider && ['qwen', 'qwen-ai', 'kimi'].includes(provider.id))
   const supportsAuthFlow = supportsInteractiveOAuth || supportsBrowserCredentialImport
   const canImportCredentials = supportsCredentialImport(provider?.id)
 
@@ -419,9 +420,15 @@ export function AddAccountDialog({
   const openProviderLoginPage = async () => {
     if (!provider) return
     const loginUrls: Record<string, string> = {
-      'qwen-ai': 'https://chat.qwen.ai',
-      qwen: 'https://www.qianwen.com',
+      deepseek: 'https://chat.deepseek.com',
+      glm: 'https://chatglm.cn',
       kimi: 'https://www.kimi.com',
+      minimax: 'https://hailuoai.video',
+      mimo: 'https://aistudio.xiaomimimo.com',
+      perplexity: 'https://www.perplexity.ai',
+      qwen: 'https://www.qianwen.com',
+      'qwen-ai': 'https://chat.qwen.ai',
+      zai: 'https://chat.z.ai',
     }
     await window.electronAPI?.app.openExternal(loginUrls[provider.id] || provider.apiEndpoint)
   }
@@ -521,6 +528,9 @@ export function AddAccountDialog({
                         <p className="font-medium text-foreground">{t('providers.browserImportTitle')}</p>
                         <p className="mt-1">{t('providers.browserImportDesc')}</p>
                       </div>
+                      {canImportCredentials && provider && (
+                        <CredentialImportPanel providerId={provider.id} onApply={parsed => { setCredentials(prev => ({ ...prev, ...parsed })); setValidationResult({}) }} t={t} />
+                      )}
                       {oauthRefreshCredentialFields.length > 0 && (
                         <div className="rounded-lg border p-3">
                           <CredentialFieldsForm
@@ -537,14 +547,16 @@ export function AddAccountDialog({
                           <ExternalLink className="mr-2 h-4 w-4" />
                           {t('providers.openProviderWebsite')}
                         </Button>
-                        <Button type="button" onClick={startBrowserImport} disabled={isBrowserImportWaiting && !!browserImportScript}>
-                          {isBrowserImportWaiting && !browserImportScript ? (
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          ) : (
-                            <Copy className="mr-2 h-4 w-4" />
-                          )}
-                          {browserImportScript ? t('providers.regenerateImportScript') : t('providers.generateImportScript')}
-                        </Button>
+                        {supportsBrowserImportScript && (
+                          <Button type="button" onClick={startBrowserImport} disabled={isBrowserImportWaiting && !!browserImportScript}>
+                            {isBrowserImportWaiting && !browserImportScript ? (
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                              <Copy className="mr-2 h-4 w-4" />
+                            )}
+                            {browserImportScript ? t('providers.regenerateImportScript') : t('providers.generateImportScript')}
+                          </Button>
+                        )}
                       </div>
                       {browserImportScript && (
                         <div className="space-y-2">
