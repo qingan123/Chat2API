@@ -2,7 +2,9 @@
 
 > 适用于 Ubuntu / Debian 无桌面服务器。安装脚本会在 SSH 中交互输入部署端口和后台登录密码（项目原生 Management Secret，留空可自动生成），自动部署完整 Py 版 `/admin/` WebUI；API Key 单独生成并保存为仅 root 可读文件。后台可以修改登录密码，修改后旧密码立即失效，并在重启、更新后保持。更新前会备份账户、配置、凭据和运行数据。
 
-**部署我的 Fork 版**
+> **重要说明：服务器部署请使用下面的“我的 Fork 版”脚本。** 官方桌面版/发行版不提供你需要的服务器 WebUI，不能用官方预构建镜像替代。Fork 版会从 `qingan123/Chat2API` 拉取源码，并构建包含 `/admin/` 管理后台的服务器镜像。
+
+**部署我的 Fork 版（服务器 WebUI，推荐）**
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/qingan123/Chat2API/main/scripts/install-fork.sh)
