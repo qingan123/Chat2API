@@ -684,7 +684,12 @@ export interface ProviderModelOverrides {
  */
 export type UserModelOverrides = Record<string, ProviderModelOverrides>
 
-export const DEEPSEEK_PRIMARY_MODELS = ['deepseek-v4-flash', 'deepseek-v4-pro']
+export const DEEPSEEK_PRIMARY_MODELS = [
+  'deepseek-v4-flash',
+  'deepseek-v4-pro',
+  'deepseek-v4.1-flash',
+  'deepseek-v4.1-pro',
+]
 
 export const DEEPSEEK_LEGACY_MODEL_MAPPING_NAMES = [
   'deepseek-chat',
@@ -940,6 +945,66 @@ export const DEFAULT_DEEPSEEK_MODEL_MAPPINGS: Record<string, ModelMapping> = {
   'deepseek-v4-pro-think-search': {
     requestModel: 'deepseek-v4-pro-think-search',
     actualModel: 'deepseek-v4-pro',
+    preferredProviderId: 'deepseek',
+  },
+  'deepseek-v4.1-flash-think': {
+    requestModel: 'deepseek-v4.1-flash-think',
+    actualModel: 'deepseek-v4.1-flash',
+    preferredProviderId: 'deepseek',
+  },
+  'deepseek-v4.1-flash-search': {
+    requestModel: 'deepseek-v4.1-flash-search',
+    actualModel: 'deepseek-v4.1-flash',
+    preferredProviderId: 'deepseek',
+  },
+  'deepseek-v4.1-flash-think-search': {
+    requestModel: 'deepseek-v4.1-flash-think-search',
+    actualModel: 'deepseek-v4.1-flash',
+    preferredProviderId: 'deepseek',
+  },
+  'deepseek-v4.1-pro-think': {
+    requestModel: 'deepseek-v4.1-pro-think',
+    actualModel: 'deepseek-v4.1-pro',
+    preferredProviderId: 'deepseek',
+  },
+  'deepseek-v4.1-pro-search': {
+    requestModel: 'deepseek-v4.1-pro-search',
+    actualModel: 'deepseek-v4.1-pro',
+    preferredProviderId: 'deepseek',
+  },
+  'deepseek-v4.1-pro-think-search': {
+    requestModel: 'deepseek-v4.1-pro-think-search',
+    actualModel: 'deepseek-v4.1-pro',
+    preferredProviderId: 'deepseek',
+  },
+  'deepseek-v4': {
+    requestModel: 'deepseek-v4',
+    actualModel: 'deepseek-v4-flash',
+    preferredProviderId: 'deepseek',
+  },
+  'deepseek-v4-search': {
+    requestModel: 'deepseek-v4-search',
+    actualModel: 'deepseek-v4-flash',
+    preferredProviderId: 'deepseek',
+  },
+  'deepseek-v4-expert': {
+    requestModel: 'deepseek-v4-expert',
+    actualModel: 'deepseek-v4-pro',
+    preferredProviderId: 'deepseek',
+  },
+  'deepseek-v4.1': {
+    requestModel: 'deepseek-v4.1',
+    actualModel: 'deepseek-v4.1-flash',
+    preferredProviderId: 'deepseek',
+  },
+  'deepseek-v4.1-search': {
+    requestModel: 'deepseek-v4.1-search',
+    actualModel: 'deepseek-v4.1-flash',
+    preferredProviderId: 'deepseek',
+  },
+  'deepseek-v4.1-expert': {
+    requestModel: 'deepseek-v4.1-expert',
+    actualModel: 'deepseek-v4.1-pro',
     preferredProviderId: 'deepseek',
   },
 }

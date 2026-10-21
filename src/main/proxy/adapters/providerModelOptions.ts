@@ -17,7 +17,7 @@ export function resolveDeepSeekChatOptions(
   _prompt: string = ''
 ): DeepSeekChatOptions {
   const modelLower = request.model.toLowerCase()
-  const isProModel = modelLower.includes('deepseek-v4-pro') || modelLower.includes('expert')
+  const isProModel = modelLower.includes('-pro') || modelLower.includes('expert')
   const isSearchAlias = modelLower.includes('search')
   const isThinkingAlias = modelLower.includes('think')
     || modelLower.includes('r1')
