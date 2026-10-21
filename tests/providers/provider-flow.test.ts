@@ -33,11 +33,18 @@ import { mergeProviderModelCapabilities } from '../../src/main/providers/modelSy
 const root = dirname(dirname(dirname(fileURLToPath(import.meta.url))))
 
 test('DeepSeek exposes two primary models and keeps feature aliases in default mappings', () => {
-  assert.deepEqual(DEEPSEEK_PRIMARY_MODELS, ['deepseek-v4-flash', 'deepseek-v4-pro'])
+  assert.deepEqual(DEEPSEEK_PRIMARY_MODELS, [
+    'deepseek-v4-flash',
+    'deepseek-v4-pro',
+    'deepseek-v4.1-flash',
+    'deepseek-v4.1-pro',
+  ])
   assert.deepEqual(deepseekConfig.supportedModels, DEEPSEEK_PRIMARY_MODELS)
   assert.deepEqual(deepseekConfig.modelMappings, {
     'deepseek-v4-flash': 'deepseek-v4-flash',
     'deepseek-v4-pro': 'deepseek-v4-pro',
+    'deepseek-v4.1-flash': 'deepseek-v4.1-flash',
+    'deepseek-v4.1-pro': 'deepseek-v4.1-pro',
   })
 
   assert.deepEqual(
@@ -113,6 +120,18 @@ test('DeepSeek feature aliases are seeded as global model mappings', () => {
     'deepseek-v4-pro-think',
     'deepseek-v4-pro-search',
     'deepseek-v4-pro-think-search',
+    'deepseek-v4.1-flash-think',
+    'deepseek-v4.1-flash-search',
+    'deepseek-v4.1-flash-think-search',
+    'deepseek-v4.1-pro-think',
+    'deepseek-v4.1-pro-search',
+    'deepseek-v4.1-pro-think-search',
+    'deepseek-v4',
+    'deepseek-v4-search',
+    'deepseek-v4-expert',
+    'deepseek-v4.1',
+    'deepseek-v4.1-search',
+    'deepseek-v4.1-expert',
   ])
   assert.deepEqual(DEFAULT_DEEPSEEK_MODEL_MAPPINGS['deepseek-v4-flash-think'], {
     requestModel: 'deepseek-v4-flash-think',
@@ -610,10 +629,14 @@ test('DeepSeek locale model labels only describe primary provider models', () =>
   assert.deepEqual(zhData.deepseek.models, {
     'deepseek-v4-flash': 'DeepSeek V4 Flash',
     'deepseek-v4-pro': 'DeepSeek V4 Pro',
+    'deepseek-v4.1-flash': 'DeepSeek V4.1 Flash',
+    'deepseek-v4.1-pro': 'DeepSeek V4.1 Pro',
   })
   assert.deepEqual(enData.deepseek.models, {
     'deepseek-v4-flash': 'DeepSeek V4 Flash',
     'deepseek-v4-pro': 'DeepSeek V4 Pro',
+    'deepseek-v4.1-flash': 'DeepSeek V4.1 Flash',
+    'deepseek-v4.1-pro': 'DeepSeek V4.1 Pro',
   })
   assert.equal('DeepSeek-R1' in zhData.deepseek.models, false)
   assert.equal('deepseek-reasoner' in enData.deepseek.models, false)
